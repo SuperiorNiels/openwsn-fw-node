@@ -117,6 +117,7 @@ else:
             os.path.join('#','openapps','cjoin'),
             os.path.join('#','openapps','uexpiration'),
             os.path.join('#','openapps','uexpiration_monitor'),
+            os.path.join('#','openapps','whisper'),
         ],
     )
     

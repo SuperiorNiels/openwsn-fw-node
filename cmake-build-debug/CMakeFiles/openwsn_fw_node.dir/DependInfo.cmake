@@ -569,6 +569,7 @@ set(CMAKE_DEPENDS_CHECK_C
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/uexpiration_monitor/uexpiration_monitor.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openapps/uexpiration_monitor/uexpiration_monitor.c.o"
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/uinject/uinject.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openapps/uinject/uinject.c.o"
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/userialbridge/userialbridge.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openapps/userialbridge/userialbridge.c.o"
+  "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/whisper/whisper.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openapps/whisper/whisper.c.o"
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openstack/02a-MAClow/IEEE802154.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openstack/02a-MAClow/IEEE802154.c.o"
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openstack/02a-MAClow/IEEE802154E.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openstack/02a-MAClow/IEEE802154E.c.o"
   "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openstack/02a-MAClow/IEEE802154_security.c" "/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/openstack/02a-MAClow/IEEE802154_security.c.o"
@@ -844,6 +845,7 @@ set(CMAKE_C_TARGET_INCLUDE_PATH
   "../projects/openmotestm/01bsp_flash/application"
   "../projects/python"
   "../projects/samr21_xpro/00std_low_power_mode"
+  "../openapps/whisper"
   )
 
 # Targets to which this target links.

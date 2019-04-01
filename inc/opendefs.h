@@ -172,6 +172,7 @@ enum {
    COMPONENT_UEXPIRATION               = 0x27,
    COMPONENT_UMONITOR                  = 0x28,
    COMPONENT_CINFRARED                 = 0x29,
+   COMPONENT_WHISPER                   = 0x2a,
 };
 
 /**

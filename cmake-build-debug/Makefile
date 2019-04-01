@@ -15378,6 +15378,33 @@ openapps/userialbridge/userialbridge.c.s:
 	$(MAKE) -f CMakeFiles/openwsn_fw_node.dir/build.make CMakeFiles/openwsn_fw_node.dir/openapps/userialbridge/userialbridge.c.s
 .PHONY : openapps/userialbridge/userialbridge.c.s
 
+openapps/whisper/whisper.o: openapps/whisper/whisper.c.o
+
+.PHONY : openapps/whisper/whisper.o
+
+# target to build an object file
+openapps/whisper/whisper.c.o:
+	$(MAKE) -f CMakeFiles/openwsn_fw_node.dir/build.make CMakeFiles/openwsn_fw_node.dir/openapps/whisper/whisper.c.o
+.PHONY : openapps/whisper/whisper.c.o
+
+openapps/whisper/whisper.i: openapps/whisper/whisper.c.i
+
+.PHONY : openapps/whisper/whisper.i
+
+# target to preprocess a source file
+openapps/whisper/whisper.c.i:
+	$(MAKE) -f CMakeFiles/openwsn_fw_node.dir/build.make CMakeFiles/openwsn_fw_node.dir/openapps/whisper/whisper.c.i
+.PHONY : openapps/whisper/whisper.c.i
+
+openapps/whisper/whisper.s: openapps/whisper/whisper.c.s
+
+.PHONY : openapps/whisper/whisper.s
+
+# target to generate assembly for a file
+openapps/whisper/whisper.c.s:
+	$(MAKE) -f CMakeFiles/openwsn_fw_node.dir/build.make CMakeFiles/openwsn_fw_node.dir/openapps/whisper/whisper.c.s
+.PHONY : openapps/whisper/whisper.c.s
+
 openstack/02a-MAClow/IEEE802154.o: openstack/02a-MAClow/IEEE802154.c.o
 
 .PHONY : openstack/02a-MAClow/IEEE802154.o
@@ -20727,6 +20754,9 @@ help:
 	@echo "... openapps/userialbridge/userialbridge.o"
 	@echo "... openapps/userialbridge/userialbridge.i"
 	@echo "... openapps/userialbridge/userialbridge.s"
+	@echo "... openapps/whisper/whisper.o"
+	@echo "... openapps/whisper/whisper.i"
+	@echo "... openapps/whisper/whisper.s"
 	@echo "... openstack/02a-MAClow/IEEE802154.o"
 	@echo "... openstack/02a-MAClow/IEEE802154.i"
 	@echo "... openstack/02a-MAClow/IEEE802154.s"

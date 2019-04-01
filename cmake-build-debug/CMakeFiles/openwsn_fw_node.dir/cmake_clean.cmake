@@ -1,4 +1,5 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/openwsn_fw_node.dir/openapps/whisper/whisper.c.o"
   "CMakeFiles/openwsn_fw_node.dir/bsp/boards/agilefox/configure/stm32f10x_it.c.o"
   "CMakeFiles/openwsn_fw_node.dir/bsp/boards/agilefox/ewarm/stm32f10x_vector.c.o"
   "CMakeFiles/openwsn_fw_node.dir/bsp/boards/agilefox/library/src/stm32f10x_adc.c.o"

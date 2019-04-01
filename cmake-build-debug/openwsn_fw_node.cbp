@@ -179,6 +179,7 @@
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/openmotestm/01bsp_flash/application"/>
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/python"/>
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/samr21_xpro/00std_low_power_mode"/>
+					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/whisper"/>
 					<Add directory="/usr/include/c++/8"/>
 					<Add directory="/usr/include/x86_64-linux-gnu/c++/8"/>
 					<Add directory="/usr/include/c++/8/backward"/>
@@ -337,6 +338,7 @@
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/openmotestm/01bsp_flash/application"/>
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/python"/>
 					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/projects/samr21_xpro/00std_low_power_mode"/>
+					<Add directory="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/whisper"/>
 					<Add directory="/usr/include/c++/8"/>
 					<Add directory="/usr/include/x86_64-linux-gnu/c++/8"/>
 					<Add directory="/usr/include/c++/8/backward"/>
@@ -4696,6 +4698,12 @@
 			<Option target="openwsn_fw_node"/>
 		</Unit>
 		<Unit filename="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/userialbridge/userialbridge_tx_serial.py">
+			<Option target="openwsn_fw_node"/>
+		</Unit>
+		<Unit filename="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/whisper/whisper.c">
+			<Option target="openwsn_fw_node"/>
+		</Unit>
+		<Unit filename="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openapps/whisper/whisper.h">
 			<Option target="openwsn_fw_node"/>
 		</Unit>
 		<Unit filename="/home/niels/Desktop/openwsn-sdn/openwsn-fw-node/openstack/02a-MAClow/IEEE802154.c">

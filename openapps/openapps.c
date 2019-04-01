@@ -14,6 +14,8 @@
 #include "cjoin.h"
 #include "cwellknown.h"
 #include "rrt.h"
+
+#include "whisper.h"
 // UDP
 #include "uecho.h"
 #include "uinject.h"
@@ -40,6 +42,8 @@ void openapps_init(void) {
    cjoin_init();
    cwellknown_init();
    //rrt_init();
+
+   whisper_init();
 
    // UDP
    //uecho_init();

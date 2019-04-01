@@ -42,6 +42,7 @@
 #include "uecho_obj.h"
 #include "uinject_obj.h"
 #include "userialbridge_obj.h"
+#include "whisper_obj.h"
 
 //=========================== prototypes ======================================
 
@@ -238,6 +239,7 @@ struct OpenMote {
    uecho_vars_t         uecho_vars;
    uinject_vars_t       uinject_vars;
    userialbridge_vars_t userialbridge_vars;
+   whisper_vars_t       whisper_vars;
 };
 
 #endif

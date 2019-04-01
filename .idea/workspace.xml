@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true" buildAllGenerated="false">
-    <generated />
+  <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true" buildAllGenerated="true">
+    <generated>
+      <config projectName="openwsn_fw_node" targetName="openwsn_fw_node" />
+    </generated>
   </component>
   <component name="CMakeSettings">
     <configurations>
@@ -9,7 +11,29 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="91c738d1-5683-4f71-9f9a-eff473762c6b" name="Default Changelist" comment="" />
+    <list default="true" id="91c738d1-5683-4f71-9f9a-eff473762c6b" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/openapps/whisper/whisper.c" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/openapps/whisper/whisper.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bsp/boards/python/openwsnmodule_obj.h" beforeDir="false" afterPath="$PROJECT_DIR$/bsp/boards/python/openwsnmodule_obj.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/Makefile.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/clion-log.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/DependInfo.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/DependInfo.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/build.make" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/build.make" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/cmake_clean.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/cmake_clean.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/flags.make" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/flags.make" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/link.txt" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/link.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/progress.make" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/openwsn_fw_node.dir/progress.make" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/openwsn_fw_node.cbp" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/openwsn_fw_node.cbp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/inc/opendefs.h" beforeDir="false" afterPath="$PROJECT_DIR$/inc/opendefs.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/openapps/SConscript" beforeDir="false" afterPath="$PROJECT_DIR$/openapps/SConscript" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/openapps/openapps.c" beforeDir="false" afterPath="$PROJECT_DIR$/openapps/openapps.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/openstack/SConscript" beforeDir="false" afterPath="$PROJECT_DIR$/openstack/SConscript" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/projects/python/SConscript.env" beforeDir="false" afterPath="$PROJECT_DIR$/projects/python/SConscript.env" afterDir="false" />
+    </list>
+    <ignored path="$PROJECT_DIR$/cmake-build-debug/" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,15 +44,90 @@
     <session id="-1862191217">
       <usages-collector id="statistics.lifecycle.project">
         <counts>
-          <entry key="project.closed" value="1" />
+          <entry key="project.closed" value="3" />
           <entry key="project.open.time.0" value="1" />
-          <entry key="project.opened" value="1" />
+          <entry key="project.open.time.1" value="1" />
+          <entry key="project.open.time.6" value="1" />
+          <entry key="project.opened" value="3" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.open">
+        <counts>
+          <entry key="SConscript" value="4" />
+          <entry key="c" value="2" />
+          <entry key="env" value="1" />
+          <entry key="h" value="2" />
+          <entry key="py" value="1" />
+          <entry key="txt" value="1" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.open">
+        <counts>
+          <entry key="CMakeLists.txt" value="1" />
+          <entry key="ObjectiveC" value="4" />
+          <entry key="PLAIN_TEXT" value="5" />
+          <entry key="Python" value="1" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.extensions.edit">
+        <counts>
+          <entry key="SConscript" value="20" />
+          <entry key="c" value="39" />
+          <entry key="env" value="27" />
+          <entry key="h" value="63" />
+          <entry key="txt" value="33" />
+        </counts>
+      </usages-collector>
+      <usages-collector id="statistics.file.types.edit">
+        <counts>
+          <entry key="CMakeLists.txt" value="33" />
+          <entry key="ObjectiveC" value="102" />
+          <entry key="PLAIN_TEXT" value="47" />
         </counts>
       </usages-collector>
     </session>
   </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/openapps/whisper/whisper.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="357">
+              <caret line="144" column="48" selection-start-line="144" selection-start-column="48" selection-end-line="144" selection-end-column="48" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/openapps/openapps.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="615">
+              <caret line="41" column="7" selection-start-line="41" selection-start-column="7" selection-end-line="41" selection-end-column="7" />
+              <folding>
+                <element signature="e#167#188#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/CMakeLists.txt" />
+        <option value="$PROJECT_DIR$/inc/opendefs.h" />
+        <option value="$PROJECT_DIR$/projects/python/SConscript.env" />
+        <option value="$PROJECT_DIR$/bsp/boards/python/openwsnmodule_obj.h" />
+        <option value="$PROJECT_DIR$/openapps/SConscript" />
+        <option value="$PROJECT_DIR$/openstack/SConscript" />
+        <option value="$PROJECT_DIR$/openapps/openapps.c" />
+        <option value="$PROJECT_DIR$/openapps/whisper/whisper.c" />
+      </list>
+    </option>
   </component>
   <component name="JsBuildToolGruntFileManager" detection-done="true" sorting="DEFINITION_ORDER" />
   <component name="JsBuildToolPackageJson" detection-done="true" sorting="DEFINITION_ORDER" />
@@ -46,25 +145,40 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
+      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
             <path>
-              <item name="openwsn-fw-node" type="b2602c69:ProjectViewProjectNode" />
+              <item name="openwsn_fw_node" type="b2602c69:ProjectViewProjectNode" />
               <item name="openwsn-fw-node" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="openwsn_fw_node" type="b2602c69:ProjectViewProjectNode" />
+              <item name="openwsn-fw-node" type="462c0819:PsiDirectoryNode" />
+              <item name="openapps" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="openwsn_fw_node" type="b2602c69:ProjectViewProjectNode" />
+              <item name="openwsn-fw-node" type="462c0819:PsiDirectoryNode" />
+              <item name="openstack" type="462c0819:PsiDirectoryNode" />
             </path>
           </expand>
           <select />
         </subPane>
       </pane>
-      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
     <property name="WebServerToolWindowFactoryState" value="false" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../openwsn-fw-root" />
     <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
     <property name="nodejs_npm_path_reset_for_default_project" value="true" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/openapps/whisper" />
+    </key>
   </component>
   <component name="RunDashboard">
     <option name="ruleStates">
@@ -132,10 +246,10 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Application.Build All" />
-      <item itemvalue="Application.openwsn_fw_node" />
       <item itemvalue="Python.Build Python" />
       <item itemvalue="Python.Build Python (Clean)" />
+      <item itemvalue="Application.Build All" />
+      <item itemvalue="Application.openwsn_fw_node" />
     </list>
   </component>
   <component name="SvnConfiguration">
@@ -149,33 +263,36 @@
       <option name="presentableId" value="Default" />
       <updated>1553693511699</updated>
       <workItem from="1553693513133" duration="207000" />
+      <workItem from="1553693721948" duration="5005000" />
+      <workItem from="1553871197445" duration="598000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="207000" />
+    <option name="totallyTimeSpent" value="5810000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="27" width="1920" height="996" extended-state="6" />
     <layout>
-      <window_info id="Favorites" side_tool="true" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.2497332" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.14887941" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info anchor="bottom" id="Database Changes" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Version Control" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Terminal" />
-      <window_info anchor="bottom" id="Event Log" side_tool="true" />
+      <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info anchor="bottom" id="Run" order="2" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.0" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" />
-      <window_info anchor="right" id="Database" />
+      <window_info anchor="bottom" id="Database Changes" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Version Control" order="8" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Terminal" order="9" />
+      <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
+      <window_info anchor="bottom" id="CMake" order="11" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+      <window_info anchor="right" id="Database" order="3" />
     </layout>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -183,5 +300,77 @@
   </component>
   <component name="VcsContentAnnotationSettings">
     <option name="myLimit" value="2678400000" />
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/SConscript">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tools/qtcreator.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1305" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/CMakeLists.txt">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="270">
+          <caret line="144" column="34" selection-start-line="144" selection-start-column="34" selection-end-line="144" selection-end-column="34" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/inc/opendefs.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="330">
+          <caret line="165" column="46" lean-forward="true" selection-start-line="165" selection-start-column="46" selection-end-line="165" selection-end-column="46" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/projects/python/SConscript.env">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="405">
+          <caret line="78" column="62" lean-forward="true" selection-start-line="78" selection-start-column="62" selection-end-line="78" selection-end-column="62" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/bsp/boards/python/openwsnmodule_obj.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="3337">
+          <caret line="231" column="35" lean-forward="true" selection-start-line="231" selection-start-column="35" selection-end-line="231" selection-end-column="35" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/openapps/SConscript">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1573">
+          <caret line="23" column="18" selection-start-line="23" selection-start-column="18" selection-end-line="23" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/openstack/SConscript">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="482">
+          <caret line="121" column="5" lean-forward="true" selection-start-line="121" selection-start-column="5" selection-end-line="121" selection-end-column="5" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/projects/SConscript">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/openapps/whisper/whisper.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="357">
+          <caret line="144" column="48" selection-start-line="144" selection-start-column="48" selection-end-line="144" selection-end-column="48" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/openapps/openapps.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="615">
+          <caret line="41" column="7" selection-start-line="41" selection-start-column="7" selection-end-line="41" selection-end-column="7" />
+          <folding>
+            <element signature="e#167#188#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
   </component>
 </project>
