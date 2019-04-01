@@ -115,7 +115,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 			msg->length = 0;
 
 			// Create data and
-			const int8_t respose_payload[] = "Whisper Loaded.";
+			const int8_t respose_payload[] = "Whisper node Loaded.";
 			packetfunctions_reserveHeaderSize(msg,sizeof(respose_payload)-1);
 			memcpy(&msg->payload[0],&respose_payload,sizeof(respose_payload)-1);
 
