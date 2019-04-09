@@ -124,6 +124,59 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 			coap_header->Code = COAP_CODE_RESP_CONTENT;
 			outcome = E_SUCCESS;
 			break;
+
+        case COAP_CODE_REQ_PUT:
+            whisper_log("Received CoAP PUT.\n");
+
+            open_addr_t my_addr;
+            my_addr.type = ADDR_128B;
+            memcpy(&my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
+            memcpy(&my_addr.addr_128b[8], 	idmanager_getMyID(ADDR_64B)->addr_64b, 8);
+
+            switch(msg->payload[1]) {
+                case 0x01:
+                    whisper_log("Whisper fake dio command (remote)\n");
+
+                    // Target
+                    my_addr.addr_128b[14] = msg->payload[2];
+                    my_addr.addr_128b[15] = msg->payload[3];
+                    memcpy(&whisper_vars.whisperDioTarget, &my_addr, sizeof(open_addr_t));
+
+                    // Parent
+                    my_addr.addr_128b[14] = msg->payload[4];
+                    my_addr.addr_128b[15] = msg->payload[5];
+                    memcpy(&whisper_vars.whisperParentTarget, &my_addr, sizeof(open_addr_t));
+
+                    // Next Hop
+                    my_addr.addr_128b[14] = msg->payload[6];
+                    my_addr.addr_128b[15] = msg->payload[7];
+                    memcpy(&whisper_vars.whipserNextHopRoot, &my_addr, sizeof(open_addr_t));
+
+                    dagrank_t rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
+
+                    whisper_log("Sending fake DIO with rank %d.\n", rank);
+
+                    whisper_log("L3 Source: "); whisper_print_address(whisper_getTargetParentAddress());
+                    whisper_log("L3 Dest: "); whisper_print_address(whisper_getTargetAddress());
+
+                    /*uint8_t result = send_WhisperDIO(rank);
+
+                    uint8_t data[2];
+                    data[0] = 0x01; // indicate fake dio send from root
+                    data[1] = result;
+                    openserial_sendWhisper(data, 2);*/
+
+                    break;
+                default:
+                    break;
+            }
+
+            // reset packet payload
+            msg->payload                     = &(msg->packet[127]);
+            msg->length                      = 0;
+            coap_header->Code                = COAP_CODE_RESP_CHANGED;
+            outcome                          = E_SUCCESS;
+            break;
 		default:
 			outcome = E_FAIL;
 			break;
