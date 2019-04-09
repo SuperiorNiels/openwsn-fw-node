@@ -110,6 +110,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 	owerror_t outcome;
 	switch (coap_header->Code) {
 		case COAP_CODE_REQ_GET:
+		    whisper_log("Received CoAP GET.\n");
 			// To reuse the packetBuffer we need to reset the message payload
 			msg->payload = &(msg->packet[127]);
 			msg->length = 0;
@@ -139,58 +140,7 @@ void whisper_timer_cb(opentimers_id_t id) {
     leds_error_toggle();
 }
 
-void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
-    leds_sync_toggle();
-	//will be run only in the root
-    whisper_log("Recieved whisper command (serial).\n");
-
-	open_addr_t my_addr;
-	my_addr.type = ADDR_128B;
-	memcpy(&my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
-	memcpy(&my_addr.addr_128b[8], 	idmanager_getMyID(ADDR_64B)->addr_64b, 8);
-
-	switch(buf[1]) {
-	    case 0x01:
-            whisper_log("Fake dio task.\n");
-	        // Fake dio
-
-            // Target
-            my_addr.addr_128b[14] = buf[2];
-            my_addr.addr_128b[15] = buf[3];
-            memcpy(&whisper_vars.whisperDioTarget, &my_addr, sizeof(open_addr_t));
-
-            // Parent
-            my_addr.addr_128b[14] = buf[4];
-            my_addr.addr_128b[15] = buf[5];
-            memcpy(&whisper_vars.whisperParentTarget, &my_addr, sizeof(open_addr_t));
-
-            // Next Hop
-            my_addr.addr_128b[14] = buf[6];
-            my_addr.addr_128b[15] = buf[7];
-            memcpy(&whisper_vars.whipserNextHopRoot, &my_addr, sizeof(open_addr_t));
-
-            // Rank, rank always last to bytes of the buffer
-            dagrank_t rank = (uint16_t) ((uint16_t) buf[bufLen - 1] << 8) | (uint16_t ) buf[bufLen];
-
-            whisper_log("Sending fake DIO with rank %d.\n", rank);
-
-            //uint8_t result = send_WhisperDIO(rank);
-
-            uint8_t data[2];
-            data[0] = 0x01; // indicate fake dio send from root
-            //data[1] = result;
-            //openserial_sendWhisper(data, 2);
-
-            break;
-	    case 0x02:
-	        whisper_log("Starting progressive dio task...");
-	        // Toggle send dio in icmpv6rpl so no more normal dios are send.
-            break;
-        default:
-            whisper_log("Received wrong command\n");
-            break;
-	}
-}
+void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {}
 
 void whisper_log(char* msg, ...) {
 	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);
