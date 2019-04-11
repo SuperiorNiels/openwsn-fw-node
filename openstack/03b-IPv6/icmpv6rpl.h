@@ -229,6 +229,7 @@ void     icmpv6rpl_killPreferredParent(void);
 void     icmpv6rpl_updateMyDAGrankAndParentSelection(void);
 void     icmpv6rpl_indicateRxDIO(OpenQueueEntry_t* msg);
 bool     icmpv6rpl_daoSent(void);
+uint8_t  send_WhisperDIO(dagrank_t target_rank);
 
 
 /**

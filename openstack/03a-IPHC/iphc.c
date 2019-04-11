@@ -89,12 +89,16 @@ owerror_t iphc_sendFromForwarding(
     msg->owner = COMPONENT_IPHC;
    
     // error checking
-    if (idmanager_getIsDAGroot()==TRUE &&
+    if (idmanager_getIsDAGroot()==TRUE && !msg->isDioFake &&
         packetfunctions_isAllRoutersMulticast(&(msg->l3_destinationAdd))==FALSE) {
         openserial_printCritical(COMPONENT_IPHC,ERR_BRIDGE_MISMATCH,
                             (errorparameter_t)0,
                             (errorparameter_t)0);
         return E_FAIL;
+    }
+
+    if (msg->isDioFake && idmanager_getIsDAGroot()) {
+        ipv6_outer_header->hop_limit = 15;
     }
    
     //discard the packet.. hop limit reached.

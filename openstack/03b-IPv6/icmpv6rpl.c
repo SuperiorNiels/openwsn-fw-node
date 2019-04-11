@@ -13,6 +13,7 @@
 #include "IEEE802154_security.h"
 #include "schedule.h"
 #include "msf.h"
+#include "whisper.h"
 
 //=========================== definition ======================================
 
@@ -813,6 +814,98 @@ void sendDIO(void) {
         icmpv6rpl_vars.busySendingDIO = TRUE;
     } else {
         openqueue_freePacketBuffer(msg);
+    }
+}
+
+uint8_t send_WhisperDIO(dagrank_t target_rank) {
+    OpenQueueEntry_t*    msg;
+    open_addr_t addressToWrite;
+
+    memset(&addressToWrite,0,sizeof(open_addr_t));
+
+    // stop if I'm not sync'ed
+    if (ieee154e_isSynch()==FALSE) {
+
+        // remove packets genereted by this module (DIO and DAO) from openqueue
+        openqueue_removeAllCreatedBy(COMPONENT_ICMPv6RPL);
+
+        // I'm not busy sending a DIO/DAO
+        icmpv6rpl_vars.busySendingDIO  = FALSE;
+        icmpv6rpl_vars.busySendingDAO  = FALSE;
+
+        // stop here
+        return E_FAIL;
+    }
+
+    // do not send DIO if I have the default DAG rank
+    if (icmpv6rpl_getMyDAGrank()==DEFAULTDAGRANK) {
+        return E_FAIL;
+    }
+
+    if(icmpv6rpl_vars.busySendingDIO == TRUE) {
+        whisper_log("Busy sending dio, not sending fake dio.\n");
+        return E_FAIL;
+    }
+
+    // if you get here, all good to send a DIO
+
+    // reserve a free packet buffer for DIO
+    msg = openqueue_getFreePacketBuffer(COMPONENT_ICMPv6RPL);
+    if (msg==NULL) {
+        openserial_printError(COMPONENT_ICMPv6RPL,ERR_NO_FREE_PACKET_BUFFER,
+                              (errorparameter_t)0,
+                              (errorparameter_t)0);
+        return 0;
+    }
+
+    // take ownership
+    msg->creator                             = COMPONENT_ICMPv6RPL;
+    msg->owner                               = COMPONENT_ICMPv6RPL;
+
+    // set transport information
+    msg->l4_protocol                         = IANA_ICMPv6;
+    msg->l4_protocol_compressed              = FALSE;
+    msg->l4_sourcePortORicmpv6Type           = IANA_ICMPv6_RPL;
+
+    // set DIO destination
+    open_addr_t* temp = whisper_getTargetAddress();
+    memcpy(&(msg->l3_destinationAdd),temp,sizeof(open_addr_t));
+    whisper_log("DIO Destionation: ");
+    whisper_print_address(&msg->l3_destinationAdd);
+
+    msg->isDioFake = TRUE;
+
+    //===== Configuration option
+    packetfunctions_reserveHeaderSize(msg,sizeof(icmpv6rpl_config_ht));
+
+    //===== DIO payload
+    // note: DIO is already mostly populated
+    icmpv6rpl_vars.dio.rank = target_rank;
+    packetfunctions_reserveHeaderSize(msg,sizeof(icmpv6rpl_dio_ht));
+    memcpy(
+            ((icmpv6rpl_dio_ht*)(msg->payload)),
+            &(icmpv6rpl_vars.dio),
+            sizeof(icmpv6rpl_dio_ht)
+    );
+
+    // reverse the rank bytes order in Big Endian
+    *(msg->payload+2) = (uint8_t) ((icmpv6rpl_vars.dio.rank >> 8) & 0xFF);
+    *(msg->payload+3) = (uint8_t) (icmpv6rpl_vars.dio.rank & 0xFF);
+
+    //===== ICMPv6 header
+    packetfunctions_reserveHeaderSize(msg,sizeof(ICMPv6_ht));
+    ((ICMPv6_ht*)(msg->payload))->type       = (uint8_t) msg->l4_sourcePortORicmpv6Type;
+    ((ICMPv6_ht*)(msg->payload))->code       = IANA_ICMPv6_RPL_DIO;
+    packetfunctions_calculateChecksum(msg,(uint8_t*)&(((ICMPv6_ht*)(msg->payload))->checksum));
+
+    //send
+    if (icmpv6_send(msg)==E_SUCCESS) {
+        whisper_log("DIO success.\n");
+        return E_SUCCESS;
+    } else {
+        whisper_log("DIO failed.\n");
+        openqueue_freePacketBuffer(msg);
+        return E_FAIL;
     }
 }
 

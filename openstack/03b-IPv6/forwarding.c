@@ -11,6 +11,7 @@
 #include "openudp.h"
 #include "debugpins.h"
 #include "scheduler.h"
+#include "whisper.h"
 
 //=========================== variables =======================================
 
@@ -126,9 +127,19 @@ owerror_t forwarding_send(OpenQueueEntry_t* msg) {
         sac = IPHC_SAC_STATEFUL;
         dac = IPHC_DAC_STATEFUL;
     }
-    // myprefix now contains the pointer to the correct prefix to use (link-local or global)
-    memcpy(&(msg->l3_sourceAdd.addr_128b[0]),myprefix->prefix,8);
-    memcpy(&(msg->l3_sourceAdd.addr_128b[8]),myadd64->addr_64b,8);
+
+    // If packet is Whipser DIO (change source address to target parent)
+    if(msg->isDioFake) {
+        open_addr_t* target_parent = whisper_getTargetParentAddress();
+        memcpy(&(msg->l3_sourceAdd.addr_128b[0]),&target_parent->addr_128b[0],8);
+        memcpy(&(msg->l3_sourceAdd.addr_128b[8]),&target_parent->addr_128b[8],8);
+        whisper_log("DIO Source: ");
+        whisper_print_address(&msg->l3_sourceAdd);
+    } else {
+        // myprefix now contains the pointer to the correct prefix to use (link-local or global)
+        memcpy(&(msg->l3_sourceAdd.addr_128b[0]), myprefix->prefix, 8);
+        memcpy(&(msg->l3_sourceAdd.addr_128b[8]), myadd64->addr_64b, 8);
+    }
 
     // initialize IPv6 header
     memset(&ipv6_outer_header,0,sizeof(ipv6_header_iht));
@@ -505,7 +516,14 @@ owerror_t forwarding_send_internal_RoutingTable(
             packetfunctions_ip128bToMac64b(&(msg->l3_destinationAdd),&temp_prefix64btoWrite,&(msg->l2_nextORpreviousHop));
         }
     } else {
-        forwarding_getNextHop(&(msg->l3_destinationAdd),&(msg->l2_nextORpreviousHop));
+        if(msg->isDioFake) {
+            open_addr_t* target = whisper_getTargetAddress(); // next hop should be the target node (whisper node)
+            packetfunctions_ip128bToMac64b(target,&temp_prefix64btoWrite,&msg->l2_nextORpreviousHop);
+            whisper_log("Next Hop MAC Address: ");
+            whisper_print_address(&msg->l2_nextORpreviousHop);
+        } else {
+            forwarding_getNextHop(&(msg->l3_destinationAdd), &(msg->l2_nextORpreviousHop));
+        }
     }
 
     if (msg->l2_nextORpreviousHop.type==ADDR_NONE) {

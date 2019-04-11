@@ -6,6 +6,7 @@
 #include "openserial.h"
 #include "topology.h"
 #include "IEEE802154_security.h"
+#include "whisper.h"
 
 //=========================== define ==========================================
 
@@ -106,8 +107,17 @@ void ieee802154_prependHeader(OpenQueueEntry_t* msg,
       IEEE802154_security_prependAuxiliarySecurityHeader(msg);
    }
 
-   // previousHop address (always 64-bit)
-   packetfunctions_writeAddress(msg,idmanager_getMyID(ADDR_64B),OW_LITTLE_ENDIAN);
+   // Whisper MAC spoofing
+   if(msg->isDioFake) {
+       open_addr_t temp, new_prev_hop;
+       open_addr_t* target = whisper_getTargetParentAddress();
+       packetfunctions_ip128bToMac64b(target,&temp,&new_prev_hop);
+       packetfunctions_writeAddress(msg,&new_prev_hop,OW_LITTLE_ENDIAN);
+   } else {
+       // previousHop address (always 64-bit)
+       packetfunctions_writeAddress(msg,idmanager_getMyID(ADDR_64B),OW_LITTLE_ENDIAN);
+   }
+
    // nextHop address
    if (packetfunctions_isBroadcastMulticast(nextHop)) {
       //broadcast address is always 16-bit

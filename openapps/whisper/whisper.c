@@ -48,8 +48,6 @@ void whisper_timer_cb(opentimers_id_t id);
 \brief Initialize this module.
 */
 void whisper_init() {
-	//this will be run in the root
-	//if(!idmanager_getIsDAGroot()) return;
 	whisper_log("Initializing whisper node.\n");
 
 	// prepare the resource descriptor for the /w path
@@ -156,15 +154,12 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
                     whisper_log("Sending fake DIO with rank %d.\n", rank);
 
-                    whisper_log("L3 Source: "); whisper_print_address(whisper_getTargetParentAddress());
-                    whisper_log("L3 Dest: "); whisper_print_address(whisper_getTargetAddress());
-
-                    /*uint8_t result = send_WhisperDIO(rank);
+                    uint8_t result = send_WhisperDIO(rank);
 
                     uint8_t data[2];
                     data[0] = 0x01; // indicate fake dio send from root
                     data[1] = result;
-                    openserial_sendWhisper(data, 2);*/
+                    //openserial_sendWhisper(data, 2);*/
 
                     break;
                 default:
@@ -193,7 +188,9 @@ void whisper_timer_cb(opentimers_id_t id) {
     leds_error_toggle();
 }
 
-void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {}
+void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
+    // Serial communication (Rx)
+}
 
 void whisper_log(char* msg, ...) {
 	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);

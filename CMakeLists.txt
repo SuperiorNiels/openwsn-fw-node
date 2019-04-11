@@ -139,8 +139,11 @@ include_directories(projects/openmotestm/01bsp_flash/application)
 include_directories(projects/python)
 include_directories(projects/samr21_xpro/00std_low_power_mode)
 include_directories(openapps/whisper)
+include_directories(openstack/03b-IPv6)
 
 add_executable(openwsn_fw_node
+        openstack/03b-IPv6/icmpv6rpl.c
+        openstack/03b-IPv6
         openapps/whisper/whisper.c
         openapps/whisper/whisper.h
         bootloader/iot-lab_M3/iotlab-m3-bsl.py
