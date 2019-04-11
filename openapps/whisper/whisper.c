@@ -97,6 +97,19 @@ open_addr_t* whisper_getNextHopRoot(void) {
     return &whisper_vars.whipserNextHopRoot;
 }
 
+bool whisperIsExpectedACK(open_addr_t* l2_ack_addr) {
+	if(whisper_vars.sendingDIO) {
+    	whisper_log("Received ACK addr: "); whisper_print_address(l2_ack_addr);
+    	whisper_log("Expected ACK addr: "); whisper_print_address(&whisper_vars.whisperReceivingACK);
+		if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisperReceivingACK)) {
+		    whisper_log("Same address, ACK received.");
+		    whisper_vars.sendingDIO = FALSE;
+			return TRUE;
+		}
+	}
+    return FALSE;
+}
+
 //=========================== private =========================================
 //not used, the root receives the primitives from Serial
 owerror_t whisper_receive(OpenQueueEntry_t* msg,
@@ -152,9 +165,15 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
                     dagrank_t rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
 
+                    open_addr_t temp;
+                    whisper_vars.whisperReceivingACK.type = ADDR_64B;
+					packetfunctions_ip128bToMac64b(&whisper_vars.whisperDioTarget,&temp,&whisper_vars.whisperReceivingACK);
+
                     whisper_log("Sending fake DIO with rank %d.\n", rank);
 
                     uint8_t result = send_WhisperDIO(rank);
+
+                    if(result == E_SUCCESS) whisper_vars.sendingDIO = TRUE;
 
                     uint8_t data[2];
                     data[0] = 0x01; // indicate fake dio send from root

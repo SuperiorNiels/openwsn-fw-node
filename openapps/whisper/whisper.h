@@ -23,6 +23,8 @@ typedef struct {
    open_addr_t			whisperDioTarget;
    open_addr_t			whisperParentTarget;
    open_addr_t          whipserNextHopRoot;
+   open_addr_t          whisperReceivingACK;
+   bool                 sendingDIO;
    uint8_t 				state;
 } whisper_vars_t;
 
@@ -37,6 +39,7 @@ void whisper_task_remote(uint8_t* buf, uint8_t bufLen);
 open_addr_t* whisper_getTargetParentAddress(void);
 open_addr_t* whisper_getTargetAddress(void);
 open_addr_t* whisper_getNextHopRoot(void);
+bool whisperIsExpectedACK(open_addr_t* l2_ack_addr);
 
 /**
 \}

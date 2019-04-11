@@ -17,6 +17,7 @@
 #include "sctimer.h"
 #include "openrandom.h"
 #include "msf.h"
+#include "whisper.h"
 
 //=========================== definition ======================================
 
@@ -1574,7 +1575,8 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
 
         if (
             idmanager_getIsDAGroot()==FALSE &&
-            icmpv6rpl_isPreferredParent(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop))
+            (icmpv6rpl_isPreferredParent(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop))
+            || whisperIsExpectedACK(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop)))
         ) {
             synchronizeAck(ieee802514_header.timeCorrection);
         }
