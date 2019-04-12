@@ -1573,10 +1573,8 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
             break;
         }
 
-        if (
-            idmanager_getIsDAGroot()==FALSE &&
-            (icmpv6rpl_isPreferredParent(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop))
-            || whisperIsExpectedACK(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop)))
+        if (idmanager_getIsDAGroot()==FALSE &&
+            icmpv6rpl_isPreferredParent(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop))
         ) {
             synchronizeAck(ieee802514_header.timeCorrection);
         }
@@ -2254,7 +2252,8 @@ port_INLINE bool isValidAck(ieee802154_header_iht* ieee802514_header, OpenQueueE
     return ieee802514_header->valid==TRUE                                                        && \
         ieee802514_header->frameType==IEEE154_TYPE_ACK                                           && \
         packetfunctions_sameAddress(&ieee802514_header->panid,idmanager_getMyID(ADDR_PANID))     && \
-        idmanager_isMyAddress(&ieee802514_header->dest)                                          && \
+        (idmanager_isMyAddress(&ieee802514_header->dest)
+        || whisperIsExpectedACK(&ieee802514_header->src))                                        && \
         packetfunctions_sameAddress(&ieee802514_header->src,&packetSent->l2_nextORpreviousHop);
 }
 
