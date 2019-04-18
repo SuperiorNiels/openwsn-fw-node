@@ -110,8 +110,8 @@ void ieee802154_prependHeader(OpenQueueEntry_t* msg,
    // Whisper MAC spoofing
    if(msg->isDioFake) {
        open_addr_t temp, new_prev_hop;
-       open_addr_t* target = whisper_getTargetParentAddress();
-       packetfunctions_ip128bToMac64b(target,&temp,&new_prev_hop);
+       open_addr_t* prev_hop_addr = getWhisperDIOparent();
+       packetfunctions_ip128bToMac64b(prev_hop_addr,&temp,&new_prev_hop);
        packetfunctions_writeAddress(msg,&new_prev_hop,OW_LITTLE_ENDIAN);
    } else {
        // previousHop address (always 64-bit)

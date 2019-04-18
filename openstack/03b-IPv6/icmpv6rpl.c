@@ -817,22 +817,16 @@ void sendDIO(void) {
     }
 }
 
-uint8_t send_WhisperDIO(dagrank_t target_rank) {
+uint8_t send_WhisperDIO() {
     OpenQueueEntry_t*    msg;
-    open_addr_t addressToWrite;
-
-    memset(&addressToWrite,0,sizeof(open_addr_t));
 
     // stop if I'm not sync'ed
     if (ieee154e_isSynch()==FALSE) {
-
         // remove packets genereted by this module (DIO and DAO) from openqueue
         openqueue_removeAllCreatedBy(COMPONENT_ICMPv6RPL);
-
         // I'm not busy sending a DIO/DAO
         icmpv6rpl_vars.busySendingDIO  = FALSE;
         icmpv6rpl_vars.busySendingDAO  = FALSE;
-
         // stop here
         return E_FAIL;
     }
@@ -842,6 +836,7 @@ uint8_t send_WhisperDIO(dagrank_t target_rank) {
         return E_FAIL;
     }
 
+    // Do not send fake DIO when already sending a real one.
     if(icmpv6rpl_vars.busySendingDIO == TRUE) {
         whisper_log("Busy sending dio, not sending fake dio.\n");
         return E_FAIL;
@@ -867,20 +862,34 @@ uint8_t send_WhisperDIO(dagrank_t target_rank) {
     msg->l4_protocol_compressed              = FALSE;
     msg->l4_sourcePortORicmpv6Type           = IANA_ICMPv6_RPL;
 
+    // indicate msg is a fake dio
+    msg->isDioFake = TRUE;
+
     // set DIO destination
-    open_addr_t* temp = whisper_getTargetAddress();
-    memcpy(&(msg->l3_destinationAdd),temp,sizeof(open_addr_t));
+    memcpy(&(msg->l3_destinationAdd),getWhisperDIOtarget(),sizeof(open_addr_t));
     whisper_log("DIO Destionation: ");
     whisper_print_address(&msg->l3_destinationAdd);
-
-    msg->isDioFake = TRUE;
 
     //===== Configuration option
     packetfunctions_reserveHeaderSize(msg,sizeof(icmpv6rpl_config_ht));
 
+    //copy the conf in the packet
+    memcpy(
+            ((icmpv6rpl_config_ht*)(msg->payload)),
+            &(icmpv6rpl_vars.conf),
+            sizeof(icmpv6rpl_config_ht)
+    );
+
+    ((icmpv6rpl_config_ht*)(msg->payload))->maxRankIncrease    = (icmpv6rpl_vars.conf.maxRankIncrease << 8)     | (icmpv6rpl_vars.conf.maxRankIncrease >>8); //  2048
+    ((icmpv6rpl_config_ht*)(msg->payload))->minHopRankIncrease = (icmpv6rpl_vars.conf.minHopRankIncrease << 8)  | (icmpv6rpl_vars.conf.minHopRankIncrease >>8); //256
+    ((icmpv6rpl_config_ht*)(msg->payload))->OCP                = (icmpv6rpl_vars.conf.OCP << 8)                 | (icmpv6rpl_vars.conf.OCP >>8); // 0 OF0
+    ((icmpv6rpl_config_ht*)(msg->payload))->lifetimeUnit       = (icmpv6rpl_vars.conf.lifetimeUnit << 8)        | (icmpv6rpl_vars.conf.lifetimeUnit >>8); // 0xffff
+
+    // No PIO in whipser dios
+
     //===== DIO payload
     // note: DIO is already mostly populated
-    icmpv6rpl_vars.dio.rank = target_rank;
+    icmpv6rpl_vars.dio.rank = getWhisperDIOrank();
     packetfunctions_reserveHeaderSize(msg,sizeof(icmpv6rpl_dio_ht));
     memcpy(
             ((icmpv6rpl_dio_ht*)(msg->payload)),

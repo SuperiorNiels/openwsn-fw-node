@@ -2253,7 +2253,7 @@ port_INLINE bool isValidAck(ieee802154_header_iht* ieee802514_header, OpenQueueE
         ieee802514_header->frameType==IEEE154_TYPE_ACK                                           && \
         packetfunctions_sameAddress(&ieee802514_header->panid,idmanager_getMyID(ADDR_PANID))     && \
         (idmanager_isMyAddress(&ieee802514_header->dest)
-        || whisperIsExpectedACK(&ieee802514_header->src))                                        && \
+        || whisperACKreceive(&ieee802514_header->src))                                        && \
         packetfunctions_sameAddress(&ieee802514_header->src,&packetSent->l2_nextORpreviousHop);
 }
 

@@ -85,26 +85,42 @@ uint8_t whisper_getState() {
 	return whisper_vars.state;
 }
 
-open_addr_t* whisper_getTargetParentAddress(void) {
-	return &whisper_vars.whisperParentTarget;
+void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
+    openqueue_freePacketBuffer(msg);
 }
 
-open_addr_t* whisper_getTargetAddress(void) {
-	return &whisper_vars.whisperDioTarget;
+void whisper_timer_cb(opentimers_id_t id) {
+    leds_error_toggle();
 }
 
-open_addr_t* whisper_getNextHopRoot(void) {
-    return &whisper_vars.whipserNextHopRoot;
+void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
+    // Serial communication (Rx) can be used to privide out band communication between node and controller
 }
 
-bool whisperIsExpectedACK(open_addr_t* l2_ack_addr) {
-	if(whisper_vars.sendingDIO) {
-		if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisperReceivingACK)) {
-		    whisper_log("ACK received.\n");
-		    whisper_vars.sendingDIO = FALSE;
-			return TRUE;
-		}
-	}
+open_addr_t* getWhisperDIOtarget() {
+    return &whisper_vars.whisper_dio.target;
+}
+
+open_addr_t* getWhisperDIOparent() {
+    return &whisper_vars.whisper_dio.parent;
+}
+
+open_addr_t* getWhisperDIOnextHop() {
+    return &whisper_vars.whisper_dio.nextHop;
+}
+
+dagrank_t getWhisperDIOrank() {
+    return whisper_vars.whisper_dio.rank;
+}
+
+bool whisperACKreceive(open_addr_t *l2_ack_addr) {
+    if(whisper_vars.whisper_ack.acceptACKs == TRUE) {
+        if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisper_ack.acceptACKaddr)) {
+            whisper_log("ACK received.\n");
+            whisper_vars.whisper_ack.acceptACKs = FALSE;
+            return TRUE;
+        }
+    }
     return FALSE;
 }
 
@@ -149,31 +165,33 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                     // Target
                     my_addr.addr_128b[14] = msg->payload[2];
                     my_addr.addr_128b[15] = msg->payload[3];
-                    memcpy(&whisper_vars.whisperDioTarget, &my_addr, sizeof(open_addr_t));
+                    memcpy(&whisper_vars.whisper_dio.target, &my_addr, sizeof(open_addr_t));
 
                     // Parent
                     my_addr.addr_128b[14] = msg->payload[4];
                     my_addr.addr_128b[15] = msg->payload[5];
-                    memcpy(&whisper_vars.whisperParentTarget, &my_addr, sizeof(open_addr_t));
+                    memcpy(&whisper_vars.whisper_dio.parent, &my_addr, sizeof(open_addr_t));
 
-                    // Next Hop
-                    my_addr.addr_128b[14] = msg->payload[6];
-                    my_addr.addr_128b[15] = msg->payload[7];
-                    memcpy(&whisper_vars.whipserNextHopRoot, &my_addr, sizeof(open_addr_t));
+                    // Next Hop == target
+                    memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
 
-                    dagrank_t rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
+                    whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
 
                     open_addr_t temp;
-                    whisper_vars.whisperReceivingACK.type = ADDR_64B;
-					packetfunctions_ip128bToMac64b(&whisper_vars.whisperDioTarget,&temp,&whisper_vars.whisperReceivingACK);
+                    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+                    // Set ACK receiving ACK adderss to dio target
+					packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
 
-                    whisper_log("Sending fake DIO with rank %d.\n", rank);
+                    whisper_log("Sending fake DIO with rank %d.\n", whisper_vars.whisper_dio.rank);
 
-                    uint8_t result = send_WhisperDIO(rank);
+                    uint8_t result = send_WhisperDIO();
 
-                    if(result == E_SUCCESS) whisper_vars.sendingDIO = TRUE;
+                    // If DIO is send successfully (to lower layers) activate ACK sniffing if the parent is not myself
+                    if(result == E_SUCCESS && (idmanager_isMyAddress(&whisper_vars.whisper_dio.parent) == FALSE)) {
+                        whisper_vars.whisper_ack.acceptACKs = TRUE;
+                    }
 
-                    uint8_t data[2];
+                    /*uint8_t data[2];
                     data[0] = 0x01; // indicate fake dio send from root
                     data[1] = result;
                     //openserial_sendWhisper(data, 2);*/
@@ -203,18 +221,8 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 	return outcome;
 }
 
-void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
-	openqueue_freePacketBuffer(msg);
-}
 
-void whisper_timer_cb(opentimers_id_t id) {
-    leds_error_toggle();
-}
-
-void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
-    // Serial communication (Rx)
-}
-
+// Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {
 	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);
 	printf("[%d] Whisper: \t", my_id->addr_64b[1]);

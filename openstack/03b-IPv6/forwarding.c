@@ -130,7 +130,7 @@ owerror_t forwarding_send(OpenQueueEntry_t* msg) {
 
     // If packet is Whipser DIO (change source address to target parent)
     if(msg->isDioFake) {
-        open_addr_t* target_parent = whisper_getTargetParentAddress();
+        open_addr_t* target_parent = getWhisperDIOparent();
         memcpy(&(msg->l3_sourceAdd.addr_128b[0]),&target_parent->addr_128b[0],8);
         memcpy(&(msg->l3_sourceAdd.addr_128b[8]),&target_parent->addr_128b[8],8);
         whisper_log("DIO Source: ");
@@ -517,10 +517,9 @@ owerror_t forwarding_send_internal_RoutingTable(
         }
     } else {
         if(msg->isDioFake) {
-            open_addr_t* target = whisper_getTargetAddress(); // next hop should be the target node (whisper node)
-            packetfunctions_ip128bToMac64b(target,&temp_prefix64btoWrite,&msg->l2_nextORpreviousHop);
+            packetfunctions_ip128bToMac64b(getWhisperDIOnextHop(),&temp_prefix64btoWrite,&msg->l2_nextORpreviousHop);
             whisper_log("Next Hop MAC Address: ");
-            whisper_print_address(&msg->l2_nextORpreviousHop);
+            whisper_print_address(&msg->l2_nextORpreviousHop); // should be the target
         } else {
             forwarding_getNextHop(&(msg->l3_destinationAdd), &(msg->l2_nextORpreviousHop));
         }
