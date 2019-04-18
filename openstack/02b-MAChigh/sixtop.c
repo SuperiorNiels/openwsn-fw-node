@@ -213,7 +213,7 @@ owerror_t sixtop_request(
     pkt->owner   = COMPONENT_SIXTOP_RES;
 
     memcpy(&(pkt->l2_nextORpreviousHop),neighbor,sizeof(open_addr_t));
-    if (celllist_toBeDeleted != NULL){
+    if (celllist_toBeDeleted != NULL) {
         memcpy(sixtop_vars.celllist_toDelete,celllist_toBeDeleted,CELLLIST_MAX_LEN*sizeof(cellInfo_ht));
     }
     sixtop_vars.cellOptions = cellOptions;

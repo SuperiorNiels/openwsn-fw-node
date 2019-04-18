@@ -99,10 +99,8 @@ open_addr_t* whisper_getNextHopRoot(void) {
 
 bool whisperIsExpectedACK(open_addr_t* l2_ack_addr) {
 	if(whisper_vars.sendingDIO) {
-    	whisper_log("Received ACK addr: "); whisper_print_address(l2_ack_addr);
-    	whisper_log("Expected ACK addr: "); whisper_print_address(&whisper_vars.whisperReceivingACK);
 		if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisperReceivingACK)) {
-		    whisper_log("Same address, ACK received.");
+		    whisper_log("ACK received.\n");
 		    whisper_vars.sendingDIO = FALSE;
 			return TRUE;
 		}
@@ -181,6 +179,12 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                     //openserial_sendWhisper(data, 2);*/
 
                     break;
+            	case 0x02:
+            		whisper_log("Whisper add cell command (remote).");
+
+
+
+					break;
                 default:
                     break;
             }
