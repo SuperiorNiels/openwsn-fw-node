@@ -1684,8 +1684,6 @@ add_executable(openwsn_fw_node
         projects/agilefox/01bsp_timer/01bsp_timer.ewp
         projects/agilefox/01bsp_uart/01bsp_uart.ewd
         projects/agilefox/01bsp_uart/01bsp_uart.ewp
-        projects/agilefox/02drv_opentimers/02drv_opentimers.ewd
-        projects/agilefox/02drv_opentimers/02drv_opentimers.ewp
         projects/agilefox/03oos_macpong/03oos_macpong.ewd
         projects/agilefox/03oos_macpong/03oos_macpong.ewp
         projects/agilefox/03oos_openwsn/03oos_openwsn.ewd
@@ -1720,8 +1718,6 @@ add_executable(openwsn_fw_node
         projects/cc1200dk/01bsp_radiotimer/01bsp_radiotimer.ewp
         projects/cc1200dk/01bsp_spi/01bsp_spi.ewp
         projects/cc1200dk/01bsp_uart/01bsp_uart.ewp
-        projects/cc1200dk/02drv_openserial/02drv_openserial.ewp
-        projects/cc1200dk/02drv_opentimers/02drv_opentimers.ewp
         projects/cc1200dk/03oos_macpong/03oos_macpong.ewp
         projects/cc1200dk/03oos_mercator/03oos_mercator.ewp
         projects/cc1200dk/03oos_openwsn/03oos_openwsn.ewp
@@ -1748,9 +1744,6 @@ add_executable(openwsn_fw_node
         projects/common/01bsp_sctimer/01bsp_sctimer.c
         projects/common/01bsp_spi/01bsp_spi.c
         projects/common/01bsp_uart/01bsp_uart.c
-        projects/common/02drv_openserial/02drv_openserial.c
-        projects/common/02drv_opentimers/02drv_opentimers.c
-        projects/common/02drv_opentimers2/02drv_opentimers2.c
         projects/common/02drv_sensors/02drv_sensors.c
         projects/common/03oos_macpong/03oos_macpong.c
         projects/common/03oos_macpong/03oos_macpong.h

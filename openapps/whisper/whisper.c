@@ -133,6 +133,8 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 						uint8_t*          coap_outgoingOptionsLen)
 {
 	owerror_t outcome;
+    open_addr_t temp;
+
 	switch (coap_header->Code) {
 		case COAP_CODE_REQ_GET:
 		    whisper_log("Received CoAP GET.\n");
@@ -177,7 +179,6 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
                     whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
 
-                    open_addr_t temp;
                     whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
                     // Set ACK receiving ACK adderss to dio target
 					packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
@@ -200,7 +201,37 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
             	case 0x02:
             		whisper_log("Whisper add cell command (remote).");
 
+                    // Target
+                    my_addr.addr_128b[14] = msg->payload[2];
+                    my_addr.addr_128b[15] = msg->payload[3];
 
+                    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
+
+                    for(uint8_t i = 0; i < CELLLIST_MAX_LEN; i++) {
+                        // Get one random cell
+                        msf_candidateAddCellList(celllist_add, 1);
+                    }
+
+                    open_addr_t target;
+                    target.type = ADDR_64B;
+                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&target);
+
+                    printf("Senidng sixtop request\n");
+                    // call sixtop
+                    owerror_t request = sixtop_request(
+                        IANA_6TOP_CMD_ADD,                  // code
+                        &target,                            // neighbor
+                        1,                                  // number cells
+                        CELLOPTIONS_RX,                     // cellOptions
+                        celllist_add,                       // celllist to add
+                        NULL,                               // celllist to delete (not used)
+                        msf_getsfid(),                      // sfid
+                        0,                                  // list command offset (not used)
+                        0                                   // list command maximum celllist (not used)
+                    );
+
+                    if(request == E_SUCCESS) whisper_log("Sixtop request sent.\n");
+                    else whisper_log("Sixtop request not sent.\n");
 
 					break;
                 default:
