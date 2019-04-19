@@ -212,6 +212,8 @@ owerror_t sixtop_request(
     pkt->creator = COMPONENT_SIXTOP_RES;
     pkt->owner   = COMPONENT_SIXTOP_RES;
 
+    pkt->is6pFase = FALSE;
+
     memcpy(&(pkt->l2_nextORpreviousHop),neighbor,sizeof(open_addr_t));
     if (celllist_toBeDeleted != NULL) {
         memcpy(sixtop_vars.celllist_toDelete,celllist_toBeDeleted,CELLLIST_MAX_LEN*sizeof(cellInfo_ht));
@@ -938,6 +940,11 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t* msg, owerror_t error){
         if(error == E_FAIL) {
             // reset handler and state if the request is failed to send out
             sixtop_vars.six2six_state = SIX_STATE_IDLE;
+
+            if(msg->is6pFase == TRUE) {
+                printf("6p FAIL.\n");
+                msg->is6pFase = FALSE;
+            }
         } else {
             // the packet has been sent out successfully
             switch (sixtop_vars.six2six_state) {
@@ -1807,4 +1814,202 @@ bool sixtop_areAvailableCellsToBeRemoved(
         }
    }
    return available;
+}
+
+// Whisper
+owerror_t sixtop_request_Whisper(
+        uint8_t      code,
+        open_addr_t* neighbor,
+        uint8_t      numCells,
+        uint8_t      cellOptions,
+        cellInfo_ht* celllist_toBeAdded,
+        cellInfo_ht* celllist_toBeDeleted,
+        uint8_t      sfid,
+        uint16_t     listingOffset,
+        uint16_t     listingMaxNumCells
+){
+    OpenQueueEntry_t* pkt;
+    uint8_t           i;
+    uint8_t           len;
+    uint16_t          length_groupid_type;
+    uint8_t           sequenceNumber;
+    owerror_t         outcome;
+
+    // filter parameters: handler, status and neighbor
+    if(
+            sixtop_vars.six2six_state != SIX_STATE_IDLE   ||
+            neighbor                  == NULL
+            ){
+        // neighbor can't be none or previous transcation doesn't finishe yet
+        return E_FAIL;
+    }
+
+    if (openqueue_getNum6PReq(neighbor)>0){
+        // remove previous request as it's not sent out
+        openqueue_remove6PrequestToNeighbor(neighbor);
+    }
+
+    // get a free packet buffer
+    pkt = openqueue_getFreePacketBuffer(COMPONENT_SIXTOP_RES);
+    if (pkt==NULL) {
+        openserial_printError(
+                COMPONENT_SIXTOP_RES,
+                ERR_NO_FREE_PACKET_BUFFER,
+                (errorparameter_t)0,
+                (errorparameter_t)0
+        );
+        return E_FAIL;
+    }
+
+    // take ownership
+    pkt->creator = COMPONENT_SIXTOP_RES;
+    pkt->owner   = COMPONENT_SIXTOP_RES;
+
+    pkt->is6pFase = TRUE;
+
+    memcpy(&(pkt->l2_nextORpreviousHop),neighbor,sizeof(open_addr_t));
+    if (celllist_toBeDeleted != NULL) {
+        memcpy(sixtop_vars.celllist_toDelete,celllist_toBeDeleted,CELLLIST_MAX_LEN*sizeof(cellInfo_ht));
+    }
+    sixtop_vars.cellOptions = cellOptions;
+
+    len  = 0;
+    if (
+            code == IANA_6TOP_CMD_ADD      ||
+            code == IANA_6TOP_CMD_DELETE   ||
+            code == IANA_6TOP_CMD_RELOCATE
+            ){
+        // append 6p celllists
+        if (code == IANA_6TOP_CMD_ADD || code == IANA_6TOP_CMD_RELOCATE){
+            for(i=0;i<CELLLIST_MAX_LEN;i++) {
+                if(celllist_toBeAdded[i].isUsed){
+                    packetfunctions_reserveHeaderSize(pkt,4);
+                    pkt->payload[0] = (uint8_t)(celllist_toBeAdded[i].slotoffset         & 0x00FF);
+                    pkt->payload[1] = (uint8_t)((celllist_toBeAdded[i].slotoffset        & 0xFF00)>>8);
+                    pkt->payload[2] = (uint8_t)(celllist_toBeAdded[i].channeloffset      & 0x00FF);
+                    pkt->payload[3] = (uint8_t)((celllist_toBeAdded[i].channeloffset     & 0xFF00)>>8);
+                    len += 4;
+                }
+            }
+        }
+        if (code == IANA_6TOP_CMD_DELETE || code == IANA_6TOP_CMD_RELOCATE){
+            for(i=0;i<CELLLIST_MAX_LEN;i++) {
+                if(celllist_toBeDeleted[i].isUsed){
+                    packetfunctions_reserveHeaderSize(pkt,4);
+                    pkt->payload[0] = (uint8_t)(celllist_toBeDeleted[i].slotoffset       & 0x00FF);
+                    pkt->payload[1] = (uint8_t)((celllist_toBeDeleted[i].slotoffset      & 0xFF00)>>8);
+                    pkt->payload[2] = (uint8_t)(celllist_toBeDeleted[i].channeloffset    & 0x00FF);
+                    pkt->payload[3] = (uint8_t)((celllist_toBeDeleted[i].channeloffset   & 0xFF00)>>8);
+                    len += 4;
+                }
+            }
+        }
+        // append 6p numberCells
+        packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+        *((uint8_t*)(pkt->payload)) = numCells;
+        len += 1;
+    }
+
+    if (code == IANA_6TOP_CMD_LIST){
+        // append 6p max number of cells
+        packetfunctions_reserveHeaderSize(pkt,sizeof(uint16_t));
+        *((uint8_t*)(pkt->payload))   = (uint8_t)(listingMaxNumCells & 0x00FF);
+        *((uint8_t*)(pkt->payload+1)) = (uint8_t)(listingMaxNumCells & 0xFF00)>>8;
+        len +=2;
+        // append 6p listing offset
+        packetfunctions_reserveHeaderSize(pkt,sizeof(uint16_t));
+        *((uint8_t*)(pkt->payload))   = (uint8_t)(listingOffset & 0x00FF);
+        *((uint8_t*)(pkt->payload+1)) = (uint8_t)(listingOffset & 0xFF00)>>8;
+        len += 2;
+        // append 6p Reserved field
+        packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+        *((uint8_t*)(pkt->payload)) = 0;
+        len += 1;
+    }
+
+    if (code != IANA_6TOP_CMD_CLEAR){
+        // append 6p celloptions
+        packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+        *((uint8_t*)(pkt->payload)) = cellOptions;
+        len+=1;
+    } else {
+        // record the neighbor in case no response  for clear
+        memcpy(&sixtop_vars.neighborToClearCells,neighbor,sizeof(open_addr_t));
+    }
+
+    // append 6p metadata
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint16_t));
+    pkt->payload[0] = (uint8_t)( sixtop_vars.cb_sf_getMetadata() & 0x00FF);
+    pkt->payload[1] = (uint8_t)((sixtop_vars.cb_sf_getMetadata() & 0xFF00)>>8);
+    len += 2;
+
+    // append 6p Seqnum and schedule Generation
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+    sequenceNumber              = neighbors_getSequenceNumber(neighbor);
+    *((uint8_t*)(pkt->payload)) = 1;
+    len += 1;
+
+    // append 6p sfid
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+    *((uint8_t*)(pkt->payload)) = sfid;
+    len += 1;
+
+    // append 6p code
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+    *((uint8_t*)(pkt->payload)) = code;
+    // record the code to determine the action after 6p senddone
+    pkt->l2_sixtop_command      = code;
+    len += 1;
+
+    // append 6p version, T(type) and  R(reserved)
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+    *((uint8_t*)(pkt->payload)) = IANA_6TOP_6P_VERSION | IANA_6TOP_TYPE_REQUEST;
+    len += 1;
+
+    // append 6p subtype id
+    packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
+    *((uint8_t*)(pkt->payload)) = IANA_6TOP_SUBIE_ID;
+    len += 1;
+
+    // append IETF IE header (length_groupid_type)
+    packetfunctions_reserveHeaderSize(pkt, sizeof(uint16_t));
+    length_groupid_type  = len;
+    length_groupid_type |= (IANA_IETF_IE_GROUP_ID  | IANA_IETF_IE_TYPE);
+    pkt->payload[0]      = length_groupid_type        & 0xFF;
+    pkt->payload[1]      = (length_groupid_type >> 8) & 0xFF;
+
+    // indicate IEs present
+    pkt->l2_payloadIEpresent = TRUE;
+    // record this packet as sixtop request message
+    pkt->l2_sixtop_messageType    = SIXTOP_CELL_REQUEST;
+
+    // send packet
+    outcome = sixtop_send(pkt);
+
+    if (outcome == E_SUCCESS){
+        //update states
+        switch(code){
+            case IANA_6TOP_CMD_ADD:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_SENDDONE;
+                break;
+            case IANA_6TOP_CMD_DELETE:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_DELETEREQUEST_SENDDONE;
+                break;
+            case IANA_6TOP_CMD_RELOCATE:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_RELOCATEREQUEST_SENDDONE;
+                break;
+            case IANA_6TOP_CMD_COUNT:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_COUNTREQUEST_SENDDONE;
+                break;
+            case IANA_6TOP_CMD_LIST:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_LISTREQUEST_SENDDONE;
+                break;
+            case IANA_6TOP_CMD_CLEAR:
+                sixtop_vars.six2six_state = SIX_STATE_WAIT_CLEARREQUEST_SENDDONE;
+                break;
+        }
+    } else {
+        openqueue_freePacketBuffer(pkt);
+    }
+    return outcome;
 }

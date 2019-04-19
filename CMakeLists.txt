@@ -1751,8 +1751,6 @@ add_executable(openwsn_fw_node
         projects/common/03oos_mercator/03oos_mercator.h
         projects/common/03oos_openwsn/03oos_openwsn.c
         projects/common/03oos_openwsn/03oos_openwsn.h
-        projects/common/03oos_sniffer/03oos_sniffer.c
-        projects/common/03oos_sniffer/03oos_sniffer.h
         projects/common/SConscript
         projects/derfmega/03oos_openwsn/03oos_openwsn.atsln
         projects/derfmega/03oos_openwsn/03oos_openwsn.atsuo

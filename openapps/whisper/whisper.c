@@ -218,11 +218,11 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
                     printf("Senidng sixtop request\n");
                     // call sixtop
-                    owerror_t request = sixtop_request(
+                    owerror_t request = sixtop_request_Whisper(
                         IANA_6TOP_CMD_ADD,                  // code
                         &target,                            // neighbor
                         1,                                  // number cells
-                        CELLOPTIONS_RX,                     // cellOptions
+                        CELLOPTIONS_TX,                     // cellOptions
                         celllist_add,                       // celllist to add
                         NULL,                               // celllist to delete (not used)
                         msf_getsfid(),                      // sfid
@@ -233,6 +233,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                     if(request == E_SUCCESS) whisper_log("Sixtop request sent.\n");
                     else whisper_log("Sixtop request not sent.\n");
 
+                    //msf_trigger6pClear(&target);
 					break;
                 default:
                     break;

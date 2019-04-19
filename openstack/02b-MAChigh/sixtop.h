@@ -150,6 +150,19 @@ bool      debugPrint_kaPeriod(void);
 // control
 void      sixtop_setIsResponseEnabled(bool isEnabled);
 
+
+// scheduling
+owerror_t sixtop_request_Whisper(
+        uint8_t      code,
+        open_addr_t* neighbor,
+        uint8_t      numCells,
+        uint8_t      cellOptions,
+        cellInfo_ht* celllist_toBeAdded,
+        cellInfo_ht* celllist_toBeRemoved,
+        uint8_t      sfid,
+        uint16_t     listingOffset,
+        uint16_t     listingMaxNumCells
+);
 /**
 \}
 \}
