@@ -29,7 +29,7 @@ typedef struct {
 } whisper_ack_sniffing;
 
 typedef struct {
-
+    open_addr_t source;
 } whisper_sixtop_request_settings;
 
 typedef struct {
@@ -40,6 +40,7 @@ typedef struct {
     // Command variables
     whisper_ack_sniffing whisper_ack;
     whisper_dio_settings whisper_dio;
+    whisper_sixtop_request_settings whisper_sixtop;
 } whisper_vars_t;
 
 //=========================== prototypes ======================================
@@ -54,6 +55,9 @@ open_addr_t*    getWhisperDIOtarget();
 open_addr_t*    getWhisperDIOparent();
 open_addr_t*    getWhisperDIOnextHop();
 dagrank_t       getWhisperDIOrank();
+
+// Whisper sixtop
+open_addr_t*    getWhisperSixtopSource();
 
 // Whisper ACK Sniffing
 bool whisperACKreceive(open_addr_t *l2_ack_addr);

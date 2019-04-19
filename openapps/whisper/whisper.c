@@ -113,6 +113,10 @@ dagrank_t getWhisperDIOrank() {
     return whisper_vars.whisper_dio.rank;
 }
 
+open_addr_t* getWhisperSixtopSource() {
+	return &whisper_vars.whisper_sixtop.source;
+}
+
 bool whisperACKreceive(open_addr_t *l2_ack_addr) {
     if(whisper_vars.whisper_ack.acceptACKs == TRUE) {
         if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisper_ack.acceptACKaddr)) {
@@ -201,10 +205,6 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
             	case 0x02:
             		whisper_log("Whisper add cell command (remote).");
 
-                    // Target
-                    my_addr.addr_128b[14] = msg->payload[2];
-                    my_addr.addr_128b[15] = msg->payload[3];
-
                     cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
 
                     for(uint8_t i = 0; i < CELLLIST_MAX_LEN; i++) {
@@ -212,11 +212,24 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                         msf_candidateAddCellList(celllist_add, 1);
                     }
 
+                    // Target
+                    my_addr.addr_128b[14] = msg->payload[2];
+                    my_addr.addr_128b[15] = msg->payload[3];
                     open_addr_t target;
                     target.type = ADDR_64B;
                     packetfunctions_ip128bToMac64b(&my_addr,&temp,&target);
 
-                    printf("Senidng sixtop request\n");
+                    // Source
+                    my_addr.addr_128b[14] = msg->payload[4];
+                    my_addr.addr_128b[15] = msg->payload[5];
+                    whisper_vars.whisper_sixtop.source.type = ADDR_64B;
+                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+					whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+					// Set ACK receiving ACK adderss to dio target
+					memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&target, sizeof(open_addr_t));
+
+					printf("Senidng sixtop request\n");
                     // call sixtop
                     owerror_t request = sixtop_request_Whisper(
                         IANA_6TOP_CMD_ADD,                  // code
@@ -230,7 +243,10 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                         0                                   // list command maximum celllist (not used)
                     );
 
-                    if(request == E_SUCCESS) whisper_log("Sixtop request sent.\n");
+                    if(request == E_SUCCESS) {
+                    	whisper_log("Sixtop request sent.\n");
+                    	whisper_vars.whisper_ack.acceptACKs = TRUE;
+                    }
                     else whisper_log("Sixtop request not sent.\n");
 
                     //msf_trigger6pClear(&target);
