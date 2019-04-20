@@ -1946,7 +1946,7 @@ owerror_t sixtop_request_Whisper(
     // append 6p Seqnum and schedule Generation
     packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
     sequenceNumber              = neighbors_getSequenceNumber(neighbor);
-    *((uint8_t*)(pkt->payload)) = 1;
+    *((uint8_t*)(pkt->payload)) = sequenceNumber;
     len += 1;
 
     // append 6p sfid
