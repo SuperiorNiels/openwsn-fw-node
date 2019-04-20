@@ -203,7 +203,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
                     break;
             	case 0x02:
-            		whisper_log("Whisper add cell command (remote).");
+            		whisper_log("Whisper add cell command (remote).\n");
 
                     cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
 
@@ -215,9 +215,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                     // Target
                     my_addr.addr_128b[14] = msg->payload[2];
                     my_addr.addr_128b[15] = msg->payload[3];
-                    open_addr_t target;
-                    target.type = ADDR_64B;
-                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&target);
+                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&whisper_vars.whisper_sixtop.target);
 
                     // Source
                     my_addr.addr_128b[14] = msg->payload[4];
@@ -227,21 +225,26 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
 					whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
 					// Set ACK receiving ACK adderss to dio target
-					memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&target, sizeof(open_addr_t));
+					memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
 
-					printf("Senidng sixtop request\n");
-                    // call sixtop
-                    owerror_t request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_ADD,                  // code
-                        &target,                            // neighbor
-                        1,                                  // number cells
-                        CELLOPTIONS_TX,                     // cellOptions
-                        celllist_add,                       // celllist to add
-                        NULL,                               // celllist to delete (not used)
-                        msf_getsfid(),                      // sfid
-                        0,                                  // list command offset (not used)
-                        0                                   // list command maximum celllist (not used)
-                    );
+                    owerror_t request = E_FAIL;
+                    if(whisperAddSixtopCellSchedule()) {
+                        whisper_log("Automonous cell to target successfully added.\n");
+                        whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                        // call sixtop
+                        request = sixtop_request_Whisper(
+                                IANA_6TOP_CMD_ADD,                  // code
+                                &whisper_vars.whisper_sixtop.target,// neighbor
+                                1,                                  // number cells
+                                CELLOPTIONS_TX,                     // cellOptions
+                                celllist_add,                       // celllist to add
+                                NULL,                               // celllist to delete (not used)
+                                msf_getsfid(),                      // sfid
+                                0,                                  // list command offset (not used)
+                                0                                   // list command maximum celllist (not used)
+                        );
+                    }
 
                     if(request == E_SUCCESS) {
                     	whisper_log("Sixtop request sent.\n");
@@ -249,7 +252,6 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
                     }
                     else whisper_log("Sixtop request not sent.\n");
 
-                    //msf_trigger6pClear(&target);
 					break;
                 default:
                     break;
@@ -269,6 +271,39 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 	return outcome;
 }
 
+bool whisperAddSixtopCellSchedule() {
+    uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
+    uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
+    uint16_t slotOffset = msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb));
+
+    if(schedule_isSlotOffsetAvailable(slotOffset)) {
+        owerror_t outcome = schedule_addActiveSlot(
+                slotOffset,                                                             // slot offset
+                CELLTYPE_RX,                                                            // type of slot
+                FALSE,                                                                  // shared?
+                msf_hashFunction_getChanneloffset((uint16_t) (256 * id_msb + id_lsb)),  // channel offset
+                &whisper_vars.whisper_sixtop.target                                     // neighbor
+        );
+        return (uint8_t) (outcome == E_SUCCESS);
+    }
+
+    return icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target);
+};
+
+void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
+    if(whisper_vars.whisper_sixtop.waiting_for_response) {
+        if (packetfunctions_sameAddress(addr, &whisper_vars.whisper_sixtop.target)) {
+            if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
+                uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
+                uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
+                schedule_removeActiveSlot(msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb)),
+                                          &whisper_vars.whisper_sixtop.target);
+                whisper_log("Sixtop response received, removing autonomous cell of target.\n");
+            } else
+                whisper_log("Not removing autonomous cell of target (parent).\n");
+        }
+    }
+}
 
 // Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {

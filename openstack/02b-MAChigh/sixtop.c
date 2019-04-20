@@ -16,6 +16,7 @@
 #include "idmanager.h"
 #include "schedule.h"
 #include "msf.h"
+#include "whisper.h"
 
 //=========================== define ==========================================
 
@@ -940,11 +941,6 @@ void sixtop_six2six_sendDone(OpenQueueEntry_t* msg, owerror_t error){
         if(error == E_FAIL) {
             // reset handler and state if the request is failed to send out
             sixtop_vars.six2six_state = SIX_STATE_IDLE;
-
-            if(msg->is6pFase == TRUE) {
-                printf("6p FAIL.\n");
-                msg->is6pFase = FALSE;
-            }
         } else {
             // the packet has been sent out successfully
             switch (sixtop_vars.six2six_state) {
@@ -1318,7 +1314,7 @@ void sixtop_six2six_notifyReceive(
             pktLen  -= 1;
 
             // add command
-            if (code == IANA_6TOP_CMD_ADD){
+            if (code == IANA_6TOP_CMD_ADD) {
                 if (schedule_getNumberOfFreeEntries() < numCells){
                     returnCode = IANA_6TOP_RC_BUSY;
                     break;
@@ -1503,6 +1499,9 @@ void sixtop_six2six_notifyReceive(
 
     if (type == SIXTOP_CELL_RESPONSE) {
         // this is a 6p response message
+
+        // Whisper, if the address matches with the target clear the autonoumous cell
+        whisperCheckSixtopResponseAddr(&pkt->l2_nextORpreviousHop);
 
         // if the code is SUCCESS
         if (code == IANA_6TOP_RC_SUCCESS || code == IANA_6TOP_RC_EOL){

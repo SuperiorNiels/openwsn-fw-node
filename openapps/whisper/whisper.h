@@ -29,7 +29,9 @@ typedef struct {
 } whisper_ack_sniffing;
 
 typedef struct {
+    open_addr_t target;
     open_addr_t source;
+    bool        waiting_for_response;
 } whisper_sixtop_request_settings;
 
 typedef struct {
@@ -58,6 +60,8 @@ dagrank_t       getWhisperDIOrank();
 
 // Whisper sixtop
 open_addr_t*    getWhisperSixtopSource();
+bool            whisperAddSixtopCellSchedule();
+void            whisperCheckSixtopResponseAddr(open_addr_t* addr);
 
 // Whisper ACK Sniffing
 bool whisperACKreceive(open_addr_t *l2_ack_addr);
