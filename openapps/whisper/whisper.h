@@ -57,11 +57,13 @@ open_addr_t*    getWhisperDIOtarget();
 open_addr_t*    getWhisperDIOparent();
 open_addr_t*    getWhisperDIOnextHop();
 dagrank_t       getWhisperDIOrank();
+void            whisperDioCommand(const uint8_t* command,open_addr_t* my_addr);
 
 // Whisper sixtop
 open_addr_t*    getWhisperSixtopSource();
 bool            whisperAddSixtopCellSchedule();
 void            whisperCheckSixtopResponseAddr(open_addr_t* addr);
+void            whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr);
 
 // Whisper ACK Sniffing
 bool whisperACKreceive(open_addr_t *l2_ack_addr);

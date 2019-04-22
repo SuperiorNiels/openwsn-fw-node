@@ -97,39 +97,6 @@ void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
     // Serial communication (Rx) can be used to privide out band communication between node and controller
 }
 
-open_addr_t* getWhisperDIOtarget() {
-    return &whisper_vars.whisper_dio.target;
-}
-
-open_addr_t* getWhisperDIOparent() {
-    return &whisper_vars.whisper_dio.parent;
-}
-
-open_addr_t* getWhisperDIOnextHop() {
-    return &whisper_vars.whisper_dio.nextHop;
-}
-
-dagrank_t getWhisperDIOrank() {
-    return whisper_vars.whisper_dio.rank;
-}
-
-open_addr_t* getWhisperSixtopSource() {
-	return &whisper_vars.whisper_sixtop.source;
-}
-
-bool whisperACKreceive(open_addr_t *l2_ack_addr) {
-    if(whisper_vars.whisper_ack.acceptACKs == TRUE) {
-        if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisper_ack.acceptACKaddr)) {
-            whisper_log("ACK received.\n");
-            whisper_vars.whisper_ack.acceptACKs = FALSE;
-            return TRUE;
-        }
-    }
-    return FALSE;
-}
-
-//=========================== private =========================================
-//not used, the root receives the primitives from Serial
 owerror_t whisper_receive(OpenQueueEntry_t* msg,
 						coap_header_iht*  coap_header,
 						coap_option_iht*  coap_incomingOptions,
@@ -137,7 +104,6 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 						uint8_t*          coap_outgoingOptionsLen)
 {
 	owerror_t outcome;
-    open_addr_t temp;
 
 	switch (coap_header->Code) {
 		case COAP_CODE_REQ_GET:
@@ -167,91 +133,11 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
             switch(msg->payload[1]) {
                 case 0x01:
                     whisper_log("Whisper fake dio command (remote)\n");
-
-                    // Target
-                    my_addr.addr_128b[14] = msg->payload[2];
-                    my_addr.addr_128b[15] = msg->payload[3];
-                    memcpy(&whisper_vars.whisper_dio.target, &my_addr, sizeof(open_addr_t));
-
-                    // Parent
-                    my_addr.addr_128b[14] = msg->payload[4];
-                    my_addr.addr_128b[15] = msg->payload[5];
-                    memcpy(&whisper_vars.whisper_dio.parent, &my_addr, sizeof(open_addr_t));
-
-                    // Next Hop == target
-                    memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
-
-                    whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) msg->payload[8] << 8) | (uint16_t ) msg->payload[9];
-
-                    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-                    // Set ACK receiving ACK adderss to dio target
-					packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
-
-                    whisper_log("Sending fake DIO with rank %d.\n", whisper_vars.whisper_dio.rank);
-
-                    uint8_t result = send_WhisperDIO();
-
-                    // If DIO is send successfully (to lower layers) activate ACK sniffing if the parent is not myself
-                    if(result == E_SUCCESS && (idmanager_isMyAddress(&whisper_vars.whisper_dio.parent) == FALSE)) {
-                        whisper_vars.whisper_ack.acceptACKs = TRUE;
-                    }
-
-                    /*uint8_t data[2];
-                    data[0] = 0x01; // indicate fake dio send from root
-                    data[1] = result;
-                    //openserial_sendWhisper(data, 2);*/
-
+                    whisperDioCommand(msg->payload, &my_addr);
                     break;
             	case 0x02:
-            		whisper_log("Whisper add cell command (remote).\n");
-
-                    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
-
-                    for(uint8_t i = 0; i < CELLLIST_MAX_LEN; i++) {
-                        // Get one random cell
-                        msf_candidateAddCellList(celllist_add, 1);
-                    }
-
-                    // Target
-                    my_addr.addr_128b[14] = msg->payload[2];
-                    my_addr.addr_128b[15] = msg->payload[3];
-                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&whisper_vars.whisper_sixtop.target);
-
-                    // Source
-                    my_addr.addr_128b[14] = msg->payload[4];
-                    my_addr.addr_128b[15] = msg->payload[5];
-                    whisper_vars.whisper_sixtop.source.type = ADDR_64B;
-                    packetfunctions_ip128bToMac64b(&my_addr,&temp,&whisper_vars.whisper_sixtop.source);
-
-					whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-					// Set ACK receiving ACK adderss to dio target
-					memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-                    owerror_t request = E_FAIL;
-                    if(whisperAddSixtopCellSchedule()) {
-                        whisper_log("Automonous cell to target successfully added.\n");
-                        whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                        // call sixtop
-                        request = sixtop_request_Whisper(
-                                IANA_6TOP_CMD_ADD,                  // code
-                                &whisper_vars.whisper_sixtop.target,// neighbor
-                                1,                                  // number cells
-                                CELLOPTIONS_TX,                     // cellOptions
-                                celllist_add,                       // celllist to add
-                                NULL,                               // celllist to delete (not used)
-                                msf_getsfid(),                      // sfid
-                                0,                                  // list command offset (not used)
-                                0                                   // list command maximum celllist (not used)
-                        );
-                    }
-
-                    if(request == E_SUCCESS) {
-                    	whisper_log("Sixtop request sent.\n");
-                    	whisper_vars.whisper_ack.acceptACKs = TRUE;
-                    }
-                    else whisper_log("Sixtop request not sent.\n");
-
+            		whisper_log("Whisper 6P command (remote).\n");
+                    whisperSixTopCommand(msg->payload, &my_addr);
 					break;
                 default:
                     break;
@@ -270,6 +156,78 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
 	return outcome;
 }
+
+// ---------------------- Whisper DIO --------------------------
+
+open_addr_t* getWhisperDIOtarget() {
+    return &whisper_vars.whisper_dio.target;
+}
+
+open_addr_t* getWhisperDIOparent() {
+    return &whisper_vars.whisper_dio.parent;
+}
+
+open_addr_t* getWhisperDIOnextHop() {
+    return &whisper_vars.whisper_dio.nextHop;
+}
+
+dagrank_t getWhisperDIOrank() {
+    return whisper_vars.whisper_dio.rank;
+}
+
+open_addr_t* getWhisperSixtopSource() {
+    return &whisper_vars.whisper_sixtop.source;
+}
+
+bool whisperACKreceive(open_addr_t *l2_ack_addr) {
+    if(whisper_vars.whisper_ack.acceptACKs == TRUE) {
+        if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisper_ack.acceptACKaddr)) {
+            whisper_log("ACK received.\n");
+            whisper_vars.whisper_ack.acceptACKs = FALSE;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void whisperDioCommand(const uint8_t* command, open_addr_t* my_addr) {
+    open_addr_t temp;
+
+    // Target
+    my_addr->addr_128b[14] = command[2];
+    my_addr->addr_128b[15] = command[3];
+    memcpy(&whisper_vars.whisper_dio.target, &my_addr, sizeof(open_addr_t));
+
+    // Parent
+    my_addr->addr_128b[14] = command[4];
+    my_addr->addr_128b[15] = command[5];
+    memcpy(&whisper_vars.whisper_dio.parent, &my_addr, sizeof(open_addr_t));
+
+    // Next Hop == target
+    memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
+
+    whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) command[8] << 8) | (uint16_t ) command[9];
+
+    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+    // Set ACK receiving ACK adderss to dio target
+    packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
+
+    whisper_log("Sending fake DIO with rank %d.\n", whisper_vars.whisper_dio.rank);
+
+    uint8_t result = send_WhisperDIO();
+
+    // If DIO is send successfully (to lower layers) activate ACK sniffing if the parent is not myself
+    if(result == E_SUCCESS && (idmanager_isMyAddress(&whisper_vars.whisper_dio.parent) == FALSE)) {
+        whisper_vars.whisper_ack.acceptACKs = TRUE;
+    }
+
+    /*uint8_t data[2];
+    data[0] = 0x01; // indicate fake dio send from root
+    data[1] = result;
+    //openserial_sendWhisper(data, 2);*/
+}
+
+// ---------------------- Whisper Sixtop --------------------------
 
 bool whisperAddSixtopCellSchedule() {
     uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
@@ -305,6 +263,99 @@ void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
     }
 }
 
+void whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr) {
+    open_addr_t temp;
+    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
+    cellInfo_ht celllist_delete[CELLLIST_MAX_LEN];
+
+    owerror_t request = E_FAIL;
+    switch(command[2]) {
+        case IANA_6TOP_CMD_ADD:
+            for(uint8_t i = 0; i < CELLLIST_MAX_LEN; i++) {
+                // Get one random cell
+                msf_candidateAddCellList(celllist_add, 1);
+            }
+
+            // Target
+            my_addr->addr_128b[14] = command[3];
+            my_addr->addr_128b[15] = command[4];
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
+
+            // Source
+            my_addr->addr_128b[14] = command[5];
+            my_addr->addr_128b[15] = command[6];
+            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+            // Set ACK receiving ACK adderss to dio target
+            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+            if(whisperAddSixtopCellSchedule()) {
+                whisper_log("Automonous cell to target successfully added.\n");
+                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                // call sixtop
+                request = sixtop_request_Whisper(
+                        IANA_6TOP_CMD_ADD,                  // code
+                        &whisper_vars.whisper_sixtop.target,// neighbor
+                        1,                                  // number cells
+                        CELLOPTIONS_TX,                     // cellOptions
+                        celllist_add,                       // celllist to add
+                        NULL,                               // celllist to delete (not used)
+                        msf_getsfid(),                      // sfid
+                        0,                                  // list command offset (not used)
+                        0                                   // list command maximum celllist (not used)
+                );
+            }
+            break;
+        case IANA_6TOP_CMD_LIST:
+            // Target
+            my_addr->addr_128b[14] = command[3];
+            my_addr->addr_128b[15] = command[4];
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
+
+            // Source
+            my_addr->addr_128b[14] = command[5];
+            my_addr->addr_128b[15] = command[6];
+            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+            // Set ACK receiving ACK adderss to dio target
+            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+            if(whisperAddSixtopCellSchedule()) {
+                whisper_log("Automonous cell to target successfully added.\n");
+                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                // call sixtop
+                request = sixtop_request_Whisper(
+                        IANA_6TOP_CMD_LIST,                  // code
+                        &whisper_vars.whisper_sixtop.target,// neighbor
+                        0,                                  // number cells
+                        0,                     // cellOptions
+                        NULL,                       // celllist to add
+                        NULL,                               // celllist to delete (not used)
+                        msf_getsfid(),                      // sfid
+                        0,                                  // list command offset (not used)
+                        0                                   // list command maximum celllist (not used)
+                );
+            }
+        default:
+            whisper_log("Unrecognized 6P command, abort.\n");
+            break;
+    }
+
+    if(request == E_SUCCESS) {
+        whisper_log("Sixtop request sent.\n");
+        whisper_vars.whisper_ack.acceptACKs = TRUE;
+    }
+    else whisper_log("Sixtop request not sent.\n");
+}
+
+
+// ============================================================================================
 // Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {
 	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);
@@ -340,6 +391,7 @@ void whisper_print_address(open_addr_t* addr) {
 	}
 	printf("\n");
 }
+
 
 
 

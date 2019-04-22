@@ -1167,6 +1167,8 @@ void sixtop_six2six_notifyReceive(
                sizeof(open_addr_t)
         );
 
+
+
         // the follow while loop only execute once
         do{
             // version check
