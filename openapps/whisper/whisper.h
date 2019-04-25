@@ -64,6 +64,7 @@ open_addr_t*    getWhisperSixtopSource();
 bool            whisperAddSixtopCellSchedule();
 void            whisperCheckSixtopResponseAddr(open_addr_t* addr);
 void            whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr);
+bool            whisper_SixTopPacketAccept(ieee802154_header_iht* ieee802514_header);
 
 // Whisper ACK Sniffing
 bool whisperACKreceive(open_addr_t *l2_ack_addr);

@@ -263,19 +263,25 @@ void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
     }
 }
 
-void whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr) {
+bool whisper_SixTopPacketAccept(ieee802154_header_iht* ieee802514_header) {
+    if(packetfunctions_sameAddress(&whisper_vars.whisper_sixtop.target,&ieee802514_header->src)) {
+        if(ieee802514_header->frameType == IEEE154_TYPE_DATA) {
+            whisper_log("Received a response packet from 6p target.\n");
+            return ieee802514_header->ieListPresent;
+        }
+    }
+    return FALSE;
+}
+
+void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
     open_addr_t temp;
-    cellInfo_ht celllist_add[CELLLIST_MAX_LEN];
-    cellInfo_ht celllist_delete[CELLLIST_MAX_LEN];
+    cellInfo_ht cellList[1]; // only 1 cell with each command
+    uint16_t slotOffset, channel;
+    uint8_t cellOptions;
 
     owerror_t request = E_FAIL;
     switch(command[2]) {
         case IANA_6TOP_CMD_ADD:
-            for(uint8_t i = 0; i < CELLLIST_MAX_LEN; i++) {
-                // Get one random cell
-                msf_candidateAddCellList(celllist_add, 1);
-            }
-
             // Target
             my_addr->addr_128b[14] = command[3];
             my_addr->addr_128b[15] = command[4];
@@ -291,21 +297,129 @@ void whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr) {
             // Set ACK receiving ACK adderss to dio target
             memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
 
+            switch(command[7]) {
+                case 0x01:
+                    cellOptions = CELLOPTIONS_TX;
+                    break;
+                case 0x02:
+                    cellOptions = CELLOPTIONS_RX;
+                    break;
+                default:
+                    whisper_log("Not a valid celloption type, command aborted.\n");
+                    return;
+            }
+
+            // Cell creation
+            switch(command[8]) {
+                case 0x01:
+                    // Cell is defined in the command
+                    slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
+                    channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
+                    if(schedule_isSlotOffsetAvailable(slotOffset)==TRUE){
+                        cellList[0].slotoffset       = slotOffset;
+                        cellList[0].channeloffset    = channel;
+                        cellList[0].isUsed           = TRUE;
+                        whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
+                        break;
+                    }
+                    whisper_log("Defined cell not available, command aborted.\n");
+                    return;
+                case 0x02:
+                    // Choose a random cell
+                    whisper_log("Adding random cell.\n");
+                    msf_candidateAddCellList(cellList, 1);
+                    break;
+                default:
+                    whisper_log("Invalid cell definition, command aborted.\n");
+                    return;
+            }
+
             if(whisperAddSixtopCellSchedule()) {
                 whisper_log("Automonous cell to target successfully added.\n");
                 whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
 
                 // call sixtop
                 request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_ADD,                  // code
-                        &whisper_vars.whisper_sixtop.target,// neighbor
-                        1,                                  // number cells
-                        CELLOPTIONS_TX,                     // cellOptions
-                        celllist_add,                       // celllist to add
-                        NULL,                               // celllist to delete (not used)
-                        msf_getsfid(),                      // sfid
-                        0,                                  // list command offset (not used)
-                        0                                   // list command maximum celllist (not used)
+                        IANA_6TOP_CMD_ADD,                   // code
+                        &whisper_vars.whisper_sixtop.target, // neighbor
+                        1,                                   // number cells
+                        cellOptions,                         // cellOptions
+                        cellList,                            // celllist to add
+                        NULL,                                // celllist to delete (not used)
+                        msf_getsfid(),                       // sfid
+                        0,                                   // list command offset (not used)
+                        0                                    // list command maximum celllist (not used)
+                );
+            }
+            break;
+        case IANA_6TOP_CMD_DELETE:
+            // Target
+            my_addr->addr_128b[14] = command[3];
+            my_addr->addr_128b[15] = command[4];
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
+
+            // Source
+            my_addr->addr_128b[14] = command[5];
+            my_addr->addr_128b[15] = command[6];
+            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+            // Set ACK receiving ACK adderss to dio target
+            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+
+            switch(command[7]) {
+                case 0x01:
+                    cellOptions = CELLOPTIONS_TX;
+                    break;
+                case 0x02:
+                    cellOptions = CELLOPTIONS_RX;
+                    break;
+                default:
+                    whisper_log("Not a valid celloption type, command aborted.\n");
+                    return;
+            }
+
+            // Cell creation
+            switch(command[8]) {
+                case 0x01:
+                    // Cell is defined in the command
+                    slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
+                    channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
+                    if(schedule_isSlotOffsetAvailable(slotOffset)==FALSE){
+                        cellList[0].slotoffset       = slotOffset;
+                        cellList[0].channeloffset    = channel;
+                        cellList[0].isUsed           = TRUE;
+                        whisper_log("Removing cell with offset: %d and channel: %d\n", slotOffset, channel);
+                        break;
+                    }
+                    whisper_log("Defined cell not used, command aborted.\n");
+                    return;
+                case 0x02:
+                    // Choose a random cell
+                    whisper_log("Removing random cells scheduled by whisper is not possible atm.\n");
+                    return;
+                default:
+                    whisper_log("Invalid cell definition, command aborted.\n");
+                    return;
+            }
+
+            if(whisperAddSixtopCellSchedule()) {
+                whisper_log("Automonous cell to target successfully added.\n");
+                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                // call sixtop
+                request = sixtop_request_Whisper(
+                        IANA_6TOP_CMD_DELETE,                   // code
+                        &whisper_vars.whisper_sixtop.target, // neighbor
+                        1,                                   // number cells
+                        cellOptions,                         // cellOptions
+                        NULL,                            // celllist to add (not used)
+                        cellList,                                // celllist to delete
+                        msf_getsfid(),                       // sfid
+                        0,                                   // list command offset (not used)
+                        0                                    // list command maximum celllist (not used)
                 );
             }
             break;
@@ -342,9 +456,44 @@ void whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr) {
                         0                                   // list command maximum celllist (not used)
                 );
             }
+            break;
+        case IANA_6TOP_CMD_CLEAR:
+            // Target
+            my_addr->addr_128b[14] = command[3];
+            my_addr->addr_128b[15] = command[4];
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
+
+            // Source
+            my_addr->addr_128b[14] = command[5];
+            my_addr->addr_128b[15] = command[6];
+            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
+            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+            // Set ACK receiving ACK adderss to dio target
+            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+            if(whisperAddSixtopCellSchedule()) {
+                whisper_log("Automonous cell to target successfully added.\n");
+                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                // call sixtop
+                request = sixtop_request_Whisper(
+                        IANA_6TOP_CMD_CLEAR,                  // code
+                        &whisper_vars.whisper_sixtop.target, // neighbor
+                        0,                                   // number cells
+                        0,                                   // cellOptions
+                        NULL,                                // celllist to add
+                        NULL,                                // celllist to delete (not used)
+                        msf_getsfid(),                       // sfid
+                        0,                                   // list command offset (not used)
+                        0                                    // list command maximum celllist (not used)
+                );
+            }
+            break;
         default:
             whisper_log("Unrecognized 6P command, abort.\n");
-            break;
+            return;
     }
 
     if(request == E_SUCCESS) {

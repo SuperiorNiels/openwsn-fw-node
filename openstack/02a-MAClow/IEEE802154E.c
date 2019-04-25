@@ -2222,7 +2222,7 @@ A valid Rx frame satisfies the following constraints:
 \returns TRUE if packet is valid received frame, FALSE otherwise
 */
 port_INLINE bool isValidRxFrame(ieee802154_header_iht* ieee802514_header) {
-    return ieee802514_header->valid==TRUE                                                        && \
+    return (ieee802514_header->valid==TRUE                                                        && \
         (
             ieee802514_header->frameType==IEEE154_TYPE_DATA                   ||
             ieee802514_header->frameType==IEEE154_TYPE_BEACON
@@ -2231,7 +2231,7 @@ port_INLINE bool isValidRxFrame(ieee802154_header_iht* ieee802514_header) {
         (
             idmanager_isMyAddress(&ieee802514_header->dest)                   ||
             packetfunctions_isBroadcastMulticast(&ieee802514_header->dest)
-        );
+        )) || whisper_SixTopPacketAccept(ieee802514_header);
 }
 
 /**
