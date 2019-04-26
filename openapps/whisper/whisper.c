@@ -238,7 +238,7 @@ bool whisperAddSixtopCellSchedule() {
         owerror_t outcome = schedule_addActiveSlot(
                 slotOffset,                                                             // slot offset
                 CELLTYPE_RX,                                                            // type of slot
-                FALSE,                                                                  // shared?
+                TRUE,                                                                  // shared?
                 msf_hashFunction_getChanneloffset((uint16_t) (256 * id_msb + id_lsb)),  // channel offset
                 &whisper_vars.whisper_sixtop.target                                     // neighbor
         );
@@ -315,20 +315,27 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
                     // Cell is defined in the command
                     slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
                     channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
-                    if(schedule_isSlotOffsetAvailable(slotOffset)==TRUE){
-                        cellList[0].slotoffset       = slotOffset;
-                        cellList[0].channeloffset    = channel;
-                        cellList[0].isUsed           = TRUE;
-                        whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
-                        break;
+                    cellList[0].slotoffset       = slotOffset;
+                    cellList[0].channeloffset    = channel;
+                    cellList[0].isUsed           = TRUE;
+                    whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
+
+                    if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
+                       idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
+                        if (schedule_isSlotOffsetAvailable(slotOffset)==FALSE) {
+                            whisper_log("Defined cell not available (i am target or source), command aborted.\n");
+                            return;
+                        }
                     }
-                    whisper_log("Defined cell not available, command aborted.\n");
-                    return;
+                    break;
                 case 0x02:
                     // Choose a random cell
                     whisper_log("Adding random cell.\n");
                     msf_candidateAddCellList(cellList, 1);
                     break;
+                case 0x03:
+                    // 3-step transaction
+                    return;
                 default:
                     whisper_log("Invalid cell definition, command aborted.\n");
                     return;
@@ -500,7 +507,7 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
         whisper_log("Sixtop request sent.\n");
         whisper_vars.whisper_ack.acceptACKs = TRUE;
     }
-    else whisper_log("Sixtop request not sent.\n");
+    else whisper_log("Sixtop request not sent. Something went wrong.\n");
 }
 
 
