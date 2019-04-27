@@ -213,7 +213,7 @@ owerror_t sixtop_request(
     pkt->creator = COMPONENT_SIXTOP_RES;
     pkt->owner   = COMPONENT_SIXTOP_RES;
 
-    pkt->is6pFase = FALSE;
+    pkt->is6pFake = FALSE;
 
     memcpy(&(pkt->l2_nextORpreviousHop),neighbor,sizeof(open_addr_t));
     if (celllist_toBeDeleted != NULL) {
@@ -1503,7 +1503,7 @@ void sixtop_six2six_notifyReceive(
         // this is a 6p response message
 
         // Whisper, if the address matches with the target clear the autonoumous cell
-        whisperCheckSixtopResponseAddr(&pkt->l2_nextORpreviousHop);
+        //whisperCheckSixtopResponseAddr(&pkt->l2_nextORpreviousHop);
 
         // if the code is SUCCESS
         if (code == IANA_6TOP_RC_SUCCESS || code == IANA_6TOP_RC_EOL){
@@ -1837,17 +1837,9 @@ owerror_t sixtop_request_Whisper(
     owerror_t         outcome;
 
     // filter parameters: handler, status and neighbor
-    if(
-            sixtop_vars.six2six_state != SIX_STATE_IDLE   ||
-            neighbor                  == NULL
-            ){
-        // neighbor can't be none or previous transcation doesn't finishe yet
+    if(neighbor == NULL) {
+        whisper_log("Neighbour should be defined");
         return E_FAIL;
-    }
-
-    if (openqueue_getNum6PReq(neighbor)>0){
-        // remove previous request as it's not sent out
-        openqueue_remove6PrequestToNeighbor(neighbor);
     }
 
     // get a free packet buffer
@@ -1866,12 +1858,14 @@ owerror_t sixtop_request_Whisper(
     pkt->creator = COMPONENT_SIXTOP_RES;
     pkt->owner   = COMPONENT_SIXTOP_RES;
 
-    pkt->is6pFase = TRUE;
+    pkt->is6pFake = TRUE;
 
     memcpy(&(pkt->l2_nextORpreviousHop),neighbor,sizeof(open_addr_t));
+
     if (celllist_toBeDeleted != NULL) {
         memcpy(sixtop_vars.celllist_toDelete,celllist_toBeDeleted,CELLLIST_MAX_LEN*sizeof(cellInfo_ht));
     }
+
     sixtop_vars.cellOptions = cellOptions;
 
     len  = 0;
@@ -1933,9 +1927,6 @@ owerror_t sixtop_request_Whisper(
         packetfunctions_reserveHeaderSize(pkt,sizeof(uint8_t));
         *((uint8_t*)(pkt->payload)) = cellOptions;
         len+=1;
-    } else {
-        // record the neighbor in case no response  for clear
-        memcpy(&sixtop_vars.neighborToClearCells,neighbor,sizeof(open_addr_t));
     }
 
     // append 6p metadata
@@ -1989,7 +1980,8 @@ owerror_t sixtop_request_Whisper(
 
     if (outcome == E_SUCCESS){
         //update states
-        switch(code){
+        whisper_log("Sixtop request sent success.\n");
+        /*switch(code){
             case IANA_6TOP_CMD_ADD:
                 sixtop_vars.six2six_state = SIX_STATE_WAIT_ADDREQUEST_SENDDONE;
                 break;
@@ -2008,7 +2000,7 @@ owerror_t sixtop_request_Whisper(
             case IANA_6TOP_CMD_CLEAR:
                 sixtop_vars.six2six_state = SIX_STATE_WAIT_CLEARREQUEST_SENDDONE;
                 break;
-        }
+        }*/
     } else {
         openqueue_freePacketBuffer(pkt);
     }

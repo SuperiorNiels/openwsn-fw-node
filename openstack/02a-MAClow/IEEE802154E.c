@@ -1864,9 +1864,12 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
         ieee154e_vars.lastCapturedTime = capturedTime;
 
         // if I just received an invalid frame, stop
+        ieee154e_vars.dataReceived->is6pFake = FALSE;
         if (isValidRxFrame(&ieee802514_header)==FALSE) {
-            // jump to the error code below this do-while loop
-            break;
+            if(whisper_SixTopPacketAccept(&ieee802514_header)) {
+                whisper_log("Invalid RX frame (not for me): whisper 6P response received.\n");
+                ieee154e_vars.dataReceived->is6pFake = TRUE;
+            } else break; // jump to the error code below this do-while loop
         }
 
         // record the timeCorrection and print out at end of slot
@@ -2043,6 +2046,10 @@ port_INLINE void activity_ri6(void) {
     ieee154e_vars.ackToSend->l2_securityLevel = ieee154e_vars.dataReceived->l2_securityLevel;
     ieee154e_vars.ackToSend->l2_keyIdMode     = ieee154e_vars.dataReceived->l2_keyIdMode;
     ieee154e_vars.ackToSend->l2_keyIndex      = ieee154e_vars.dataReceived->l2_keyIndex;
+
+    // Setting is6Fake to true will make the prepend header function change the source address of the ACK
+    // The source address is set to the whisper sixtop source adderess (to fake the sender)
+    if(ieee154e_vars.dataReceived->is6pFake) ieee154e_vars.ackToSend->is6pFake = TRUE;
 
     ieee802154_prependHeader(ieee154e_vars.ackToSend,
                             ieee154e_vars.ackToSend->l2_frameType,
@@ -2231,7 +2238,7 @@ port_INLINE bool isValidRxFrame(ieee802154_header_iht* ieee802514_header) {
         (
             idmanager_isMyAddress(&ieee802514_header->dest)                   ||
             packetfunctions_isBroadcastMulticast(&ieee802514_header->dest)
-        )) || whisper_SixTopPacketAccept(ieee802514_header);
+        ));
 }
 
 /**
@@ -2752,6 +2759,11 @@ void notif_sendDone(OpenQueueEntry_t* packetSent, owerror_t error) {
 }
 
 void notif_receive(OpenQueueEntry_t* packetReceived) {
+    if(packetReceived->is6pFake) {
+        whisperCheckSixtopResponseAddr(&packetReceived->l2_nextORpreviousHop);
+        whisper_log("Received addr: "); whisper_print_address(&packetReceived->l2_nextORpreviousHop);
+        return; // packet is a response to whisper 6p command
+    }
     // record the current ASN
     memcpy(&packetReceived->l2_asn, &ieee154e_vars.asn, sizeof(asn_t));
     // indicate reception to the schedule, to keep statistics

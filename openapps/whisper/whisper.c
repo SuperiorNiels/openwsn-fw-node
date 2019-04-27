@@ -250,6 +250,7 @@ bool whisperAddSixtopCellSchedule() {
 void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
         if (packetfunctions_sameAddress(addr, &whisper_vars.whisper_sixtop.target)) {
+            whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
             if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
                 uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
                 uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
@@ -258,7 +259,11 @@ void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
                 whisper_log("Sixtop response received, removing autonomous cell of target.\n");
             } else
                 whisper_log("Not removing autonomous cell of target (parent).\n");
+        } else {
+            whisper_log("Sixtop response received from wrong address.\n");
         }
+    } else {
+        whisper_log("Not waiting for a 6p response, yet we got here...\n");
     }
 }
 
@@ -292,6 +297,12 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
             whisper_vars.whisper_sixtop.source.type = ADDR_64B;
             packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
 
+            if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
+               idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
+                whisper_log("Adding cells with whisper node is not allowed at the moment.\n");
+                return;
+            }
+
             whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
             // Set ACK receiving ACK adderss to dio target
             memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
@@ -318,14 +329,6 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
                     cellList[0].channeloffset    = channel;
                     cellList[0].isUsed           = TRUE;
                     whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
-
-                    if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
-                       idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
-                        if (schedule_isSlotOffsetAvailable(slotOffset)==FALSE) {
-                            whisper_log("Defined cell not available (i am target or source), command aborted.\n");
-                            return;
-                        }
-                    }
                     break;
                 case 0x02:
                     // Choose a random cell
@@ -356,6 +359,8 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
                         0,                                   // list command offset (not used)
                         0                                    // list command maximum celllist (not used)
                 );
+            } else {
+                whisper_log("Failed to add cell to target. 6P response would not be received.\n");
             }
             break;
         case IANA_6TOP_CMD_DELETE:

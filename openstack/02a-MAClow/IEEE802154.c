@@ -114,7 +114,7 @@ void ieee802154_prependHeader(OpenQueueEntry_t* msg,
         open_addr_t *prev_hop_addr = getWhisperDIOparent();
         packetfunctions_ip128bToMac64b(prev_hop_addr, &temp, &new_prev_hop);
         packetfunctions_writeAddress(msg, &new_prev_hop, OW_LITTLE_ENDIAN);
-    } else if(msg->is6pFase) {
+    } else if(msg->is6pFake) {
         packetfunctions_writeAddress(msg, getWhisperSixtopSource(), OW_LITTLE_ENDIAN);
     }else {
        // previousHop address (always 64-bit)
