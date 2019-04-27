@@ -196,21 +196,17 @@ void whisperDioCommand(const uint8_t* command, open_addr_t* my_addr) {
     // Target
     my_addr->addr_128b[14] = command[2];
     my_addr->addr_128b[15] = command[3];
-    memcpy(&whisper_vars.whisper_dio.target, &my_addr, sizeof(open_addr_t));
+    memcpy(&whisper_vars.whisper_dio.target, my_addr, sizeof(open_addr_t));
 
     // Parent
     my_addr->addr_128b[14] = command[4];
     my_addr->addr_128b[15] = command[5];
-    memcpy(&whisper_vars.whisper_dio.parent, &my_addr, sizeof(open_addr_t));
+    memcpy(&whisper_vars.whisper_dio.parent, my_addr, sizeof(open_addr_t));
 
     // Next Hop == target
     memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
 
     whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) command[8] << 8) | (uint16_t ) command[9];
-
-    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-    // Set ACK receiving ACK adderss to dio target
-    packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
 
     whisper_log("Sending fake DIO with rank %d.\n", whisper_vars.whisper_dio.rank);
 
@@ -218,6 +214,9 @@ void whisperDioCommand(const uint8_t* command, open_addr_t* my_addr) {
 
     // If DIO is send successfully (to lower layers) activate ACK sniffing if the parent is not myself
     if(result == E_SUCCESS && (idmanager_isMyAddress(&whisper_vars.whisper_dio.parent) == FALSE)) {
+        whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+        // Set ACK receiving ACK adderss to dio target
+        packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
         whisper_vars.whisper_ack.acceptACKs = TRUE;
     }
 
