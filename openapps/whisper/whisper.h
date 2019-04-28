@@ -9,8 +9,13 @@
 */
 
 #include "opencoap.h"
+#include "IEEE802154.h"
 
 //=========================== define ==========================================
+
+#define WHISPER_STATE_IDLE      0x00
+#define WHISPER_STATE_SIXTOP    0x01
+#define WHISPER_STATE_DIO       0x02
 
 //=========================== typedef =========================================
 
@@ -29,16 +34,22 @@ typedef struct {
 } whisper_ack_sniffing;
 
 typedef struct {
-    open_addr_t target;
-    open_addr_t source;
-    bool        waiting_for_response;
+    open_addr_t     target;
+    open_addr_t     source;
+    uint8_t         request_type;
+    uint8_t         cellType;
+    uint8_t         seqNum;
+    cellInfo_ht     cell;
+    bool            waiting_for_response;
 } whisper_sixtop_request_settings;
 
 typedef struct {
     coap_resource_desc_t desc;
-    opentimers_id_t      timerId;
+    opentimers_id_t      periodicTimer;
+    opentimers_id_t      oneshotTimer;
     uint16_t             timerPeriod;
     uint8_t 			 state;
+    open_addr_t          my_addr;
     // Command variables
     whisper_ack_sniffing whisper_ack;
     whisper_dio_settings whisper_dio;
@@ -57,14 +68,18 @@ open_addr_t*    getWhisperDIOtarget();
 open_addr_t*    getWhisperDIOparent();
 open_addr_t*    getWhisperDIOnextHop();
 dagrank_t       getWhisperDIOrank();
-void            whisperDioCommand(const uint8_t* command,open_addr_t* my_addr);
+void            whisperDioCommand(const uint8_t* command);
 
 // Whisper sixtop
 open_addr_t*    getWhisperSixtopSource();
 bool            whisperAddSixtopCellSchedule();
-void            whisperCheckSixtopResponseAddr(open_addr_t* addr);
-void            whisperSixTopCommand(const uint8_t* command,open_addr_t* my_addr);
-bool            whisper_SixTopPacketAccept(ieee802154_header_iht* ieee802514_header);
+bool            whisperSixtopParse(const uint8_t* command);
+void            whisperExecuteSixtop();
+void            whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code);
+void            whisperSixtopProcessIE(OpenQueueEntry_t* pkt);
+void            whisperSixtopClearCb(opentimers_id_t id); // callback for timer
+
+bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);
 
 // Whisper ACK Sniffing
 bool whisperACKreceive(open_addr_t *l2_ack_addr);

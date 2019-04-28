@@ -50,6 +50,12 @@ void whisper_timer_cb(opentimers_id_t id);
 void whisper_init() {
 	whisper_log("Initializing whisper node.\n");
 
+	whisper_vars.state = WHISPER_STATE_IDLE;
+
+    whisper_vars.my_addr.type = ADDR_128B;
+    memcpy(&whisper_vars.my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
+    memcpy(&whisper_vars.my_addr.addr_128b[8], 	    idmanager_getMyID(ADDR_64B)->addr_64b, 8);
+
 	// prepare the resource descriptor for the /w path
 	whisper_vars.desc.path0len             = sizeof(whisper_path0)-1;
 	whisper_vars.desc.path0val             = (uint8_t*)(&whisper_path0);
@@ -67,9 +73,10 @@ void whisper_init() {
 
 	// Start timer for data collection (on root)
     whisper_vars.timerPeriod = 5000; // 5 seconds
-    whisper_vars.timerId = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_RPL);
+    whisper_vars.periodicTimer = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_RPL);
+    whisper_vars.oneshotTimer = opentimers_create(TIMER_GENERAL_PURPOSE, TASKPRIO_RPL);
     opentimers_scheduleIn(
-            whisper_vars.timerId,
+            whisper_vars.periodicTimer,
             whisper_vars.timerPeriod,
             TIME_MS,
             TIMER_PERIODIC,
@@ -94,7 +101,7 @@ void whisper_timer_cb(opentimers_id_t id) {
 }
 
 void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
-    // Serial communication (Rx) can be used to privide out band communication between node and controller
+    // Serial communication (Rx) can be used to provide out band communication between node and controller
 }
 
 owerror_t whisper_receive(OpenQueueEntry_t* msg,
@@ -125,22 +132,25 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
         case COAP_CODE_REQ_PUT:
             whisper_log("Received CoAP PUT.\n");
 
-            open_addr_t my_addr;
-            my_addr.type = ADDR_128B;
-            memcpy(&my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
-            memcpy(&my_addr.addr_128b[8], 	idmanager_getMyID(ADDR_64B)->addr_64b, 8);
-
-            switch(msg->payload[1]) {
-                case 0x01:
-                    whisper_log("Whisper fake dio command (remote)\n");
-                    whisperDioCommand(msg->payload, &my_addr);
-                    break;
-            	case 0x02:
-            		whisper_log("Whisper 6P command (remote).\n");
-                    whisperSixTopCommand(msg->payload, &my_addr);
-					break;
-                default:
-                    break;
+            // Don's execute command if state is not idle
+            if(whisper_vars.state == WHISPER_STATE_IDLE) {
+                switch(msg->payload[1]) {
+                    case 0x01:
+                        whisper_log("Whisper fake dio command (remote)\n");
+                        whisperDioCommand(msg->payload);
+                        break;
+                    case 0x02:
+                        whisper_log("Whisper 6P command (remote).\n");
+                        if(whisperSixtopParse(msg->payload)) whisperExecuteSixtop();
+                        else whisper_log("Parsing command failed.\n");
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                whisper_log("Whisper node not idle, abort.\n");
+                // Notify controller
+                break;
             }
 
             // reset packet payload
@@ -148,6 +158,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
             msg->length                      = 0;
             coap_header->Code                = COAP_CODE_RESP_CHANGED;
             outcome                          = E_SUCCESS;
+
             break;
 		default:
 			outcome = E_FAIL;
@@ -190,18 +201,18 @@ bool whisperACKreceive(open_addr_t *l2_ack_addr) {
     return FALSE;
 }
 
-void whisperDioCommand(const uint8_t* command, open_addr_t* my_addr) {
+void whisperDioCommand(const uint8_t* command) {
     open_addr_t temp;
 
     // Target
-    my_addr->addr_128b[14] = command[2];
-    my_addr->addr_128b[15] = command[3];
-    memcpy(&whisper_vars.whisper_dio.target, my_addr, sizeof(open_addr_t));
+    whisper_vars.my_addr.addr_128b[14] = command[2];
+    whisper_vars.my_addr.addr_128b[15] = command[3];
+    memcpy(&whisper_vars.whisper_dio.target, &whisper_vars.my_addr, sizeof(open_addr_t));
 
     // Parent
-    my_addr->addr_128b[14] = command[4];
-    my_addr->addr_128b[15] = command[5];
-    memcpy(&whisper_vars.whisper_dio.parent, my_addr, sizeof(open_addr_t));
+    whisper_vars.my_addr.addr_128b[14] = command[4];
+    whisper_vars.my_addr.addr_128b[15] = command[5];
+    memcpy(&whisper_vars.whisper_dio.parent, &whisper_vars.my_addr, sizeof(open_addr_t));
 
     // Next Hop == target
     memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
@@ -220,10 +231,7 @@ void whisperDioCommand(const uint8_t* command, open_addr_t* my_addr) {
         whisper_vars.whisper_ack.acceptACKs = TRUE;
     }
 
-    /*uint8_t data[2];
-    data[0] = 0x01; // indicate fake dio send from root
-    data[1] = result;
-    //openserial_sendWhisper(data, 2);*/
+    // Notify controller when ACK is received
 }
 
 // ---------------------- Whisper Sixtop --------------------------
@@ -245,20 +253,36 @@ bool whisperAddSixtopCellSchedule() {
     }
 
     return icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target);
-};
+}
 
-void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
+void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
         if (packetfunctions_sameAddress(addr, &whisper_vars.whisper_sixtop.target)) {
+
+            switch(code) {
+                case IANA_6TOP_RC_SUCCESS:
+                    whisper_log("Whisper 6P command successful.\n");
+                    // Notify controller
+                    break;
+                case IANA_6TOP_RC_SEQNUM_ERR:
+                    whisper_log("Whisper 6P command wrong seqNum.\n");
+                default:
+                    whisper_log("Whisper 6P failed.\n");
+                    // Notify controller
+                    break;
+            }
+
             whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+            whisper_vars.state = WHISPER_STATE_IDLE;
+
+            // Remove autonomous cell
             if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
                 uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
                 uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
                 schedule_removeActiveSlot(msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb)),
                                           &whisper_vars.whisper_sixtop.target);
                 whisper_log("Sixtop response received, removing autonomous cell of target.\n");
-            } else
-                whisper_log("Not removing autonomous cell of target (parent).\n");
+            } else whisper_log("Not removing autonomous cell of target (parent).\n");
         } else {
             whisper_log("Sixtop response received from wrong address.\n");
         }
@@ -267,7 +291,7 @@ void whisperCheckSixtopResponseAddr(open_addr_t* addr) {
     }
 }
 
-bool whisper_SixTopPacketAccept(ieee802154_header_iht* ieee802514_header) {
+bool whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header) {
     if(packetfunctions_sameAddress(&whisper_vars.whisper_sixtop.target,&ieee802514_header->src)) {
         if(ieee802514_header->frameType == IEEE154_TYPE_DATA) {
             whisper_log("Received a response packet from 6p target.\n");
@@ -277,26 +301,87 @@ bool whisper_SixTopPacketAccept(ieee802154_header_iht* ieee802514_header) {
     return FALSE;
 }
 
-void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
+void whisperSixtopProcessIE(OpenQueueEntry_t* pkt) {
+    uint16_t temp;
+    sixtop_processIEs(pkt, &temp); // Process IE, this function should call whisperSixtopResonseReceive
+}
+
+bool whisperSixtopParse(const uint8_t* command) {
     open_addr_t temp;
-    cellInfo_ht cellList[1]; // only 1 cell with each command
-    uint16_t slotOffset, channel;
-    uint8_t cellOptions;
+    uint8_t slotOffset, channel;
+
+    if(command[1] != 0x02) {
+        whisper_log("Not a sixtop command, command parsing aborted\n");
+        return FALSE;
+    }
+
+    // Command is a sixtop command, parse it
+    whisper_vars.whisper_sixtop.request_type = command[2];
+
+    // Target ID should be located at bytes 3-4, we use my_addr to construct the target address
+    whisper_vars.my_addr.addr_128b[14] = command[3];
+    whisper_vars.my_addr.addr_128b[15] = command[4];
+    packetfunctions_ip128bToMac64b(&whisper_vars.my_addr,&temp,&whisper_vars.whisper_sixtop.target);
+
+    // Source ID should be located at bytes 5-6, we use my_addr to construct the source address
+    whisper_vars.my_addr.addr_128b[14] = command[5];
+    whisper_vars.my_addr.addr_128b[15] = command[6];
+    packetfunctions_ip128bToMac64b(&whisper_vars.my_addr,&temp,&whisper_vars.whisper_sixtop.source);
+
+    // CellType
+    whisper_vars.whisper_sixtop.cellType = command[7];
+    switch(command[7]) {
+        case CELLOPTIONS_TX:
+        case CELLOPTIONS_RX:
+            break;
+        default:
+            whisper_log("Cell Type not valid, command parsing aborted.\n");
+            return FALSE;
+    }
+
+    // SeqNum
+    whisper_vars.whisper_sixtop.seqNum = command[8];
+    if(whisper_vars.whisper_sixtop.seqNum == 255) {
+        // SeqNum 255 ==> use internal stored seqNum
+        whisper_vars.whisper_sixtop.seqNum = neighbors_getSequenceNumber(&whisper_vars.whisper_sixtop.target);
+    }
+
+    switch(command[9]) {
+        case 0x00:
+            whisper_vars.whisper_sixtop.cell.isUsed = FALSE;
+        case 0x01:
+            // Cell is defined in the command
+            slotOffset = (uint16_t) (command[10] << 8) | (uint16_t ) command[11];
+            channel = (uint16_t) (command[12] << 8) | (uint16_t ) command[13];
+            whisper_vars.whisper_sixtop.cell.slotoffset       = slotOffset;
+            whisper_vars.whisper_sixtop.cell.channeloffset    = channel;
+            whisper_vars.whisper_sixtop.cell.isUsed           = TRUE;
+            whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
+            break;
+        case 0x02:
+            // Choose a random cell
+            whisper_log("Adding random cell.\n");
+            slotOffset = openrandom_get16b() % schedule_getFrameLength();
+            if(schedule_isSlotOffsetAvailable(slotOffset)==TRUE){
+                whisper_vars.whisper_sixtop.cell.slotoffset       = slotOffset;
+                whisper_vars.whisper_sixtop.cell.channeloffset    = openrandom_get16b() & 0x0F;
+                whisper_vars.whisper_sixtop.cell.isUsed           = TRUE;
+            }
+            break;
+        default:
+            whisper_log("Invalid cell definition, command parsing aborted.\n");
+            return FALSE;
+    }
+
+    return TRUE; // command parsed successfully
+}
+
+void whisperExecuteSixtop() {
+    // Whisper_vars sixtop should be set correctly to run this command
 
     owerror_t request = E_FAIL;
-    switch(command[2]) {
+    switch(whisper_vars.whisper_sixtop.request_type) {
         case IANA_6TOP_CMD_ADD:
-            // Target
-            my_addr->addr_128b[14] = command[3];
-            my_addr->addr_128b[15] = command[4];
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
-
-            // Source
-            my_addr->addr_128b[14] = command[5];
-            my_addr->addr_128b[15] = command[6];
-            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
-
             if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
                idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
                 whisper_log("Adding cells with whisper node is not allowed at the moment.\n");
@@ -307,42 +392,6 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
             // Set ACK receiving ACK adderss to dio target
             memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
 
-            switch(command[7]) {
-                case 0x01:
-                    cellOptions = CELLOPTIONS_TX;
-                    break;
-                case 0x02:
-                    cellOptions = CELLOPTIONS_RX;
-                    break;
-                default:
-                    whisper_log("Not a valid celloption type, command aborted.\n");
-                    return;
-            }
-
-            // Cell creation
-            switch(command[8]) {
-                case 0x01:
-                    // Cell is defined in the command
-                    slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
-                    channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
-                    cellList[0].slotoffset       = slotOffset;
-                    cellList[0].channeloffset    = channel;
-                    cellList[0].isUsed           = TRUE;
-                    whisper_log("Adding cell with offset: %d and channel: %d\n", slotOffset, channel);
-                    break;
-                case 0x02:
-                    // Choose a random cell
-                    whisper_log("Adding random cell.\n");
-                    msf_candidateAddCellList(cellList, 1);
-                    break;
-                case 0x03:
-                    // 3-step transaction
-                    return;
-                default:
-                    whisper_log("Invalid cell definition, command aborted.\n");
-                    return;
-            }
-
             if(whisperAddSixtopCellSchedule()) {
                 whisper_log("Automonous cell to target successfully added.\n");
                 whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
@@ -351,156 +400,22 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
                 request = sixtop_request_Whisper(
                         IANA_6TOP_CMD_ADD,                   // code
                         &whisper_vars.whisper_sixtop.target, // neighbor
-                        1,                                   // number cells
-                        cellOptions,                         // cellOptions
-                        cellList,                            // celllist to add
-                        NULL,                                // celllist to delete (not used)
+                        whisper_vars.whisper_sixtop.cellType,// cellOptions
+                        &whisper_vars.whisper_sixtop.cell,    // cell
                         msf_getsfid(),                       // sfid
                         0,                                   // list command offset (not used)
-                        0                                    // list command maximum celllist (not used)
+                        0,                                   // list command maximum celllist (not used)
+                        whisper_vars.whisper_sixtop.seqNum
                 );
             } else {
                 whisper_log("Failed to add cell to target. 6P response would not be received.\n");
             }
             break;
         case IANA_6TOP_CMD_DELETE:
-            // Target
-            my_addr->addr_128b[14] = command[3];
-            my_addr->addr_128b[15] = command[4];
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
-
-            // Source
-            my_addr->addr_128b[14] = command[5];
-            my_addr->addr_128b[15] = command[6];
-            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
-
-            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-            // Set ACK receiving ACK adderss to dio target
-            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-
-            switch(command[7]) {
-                case 0x01:
-                    cellOptions = CELLOPTIONS_TX;
-                    break;
-                case 0x02:
-                    cellOptions = CELLOPTIONS_RX;
-                    break;
-                default:
-                    whisper_log("Not a valid celloption type, command aborted.\n");
-                    return;
-            }
-
-            // Cell creation
-            switch(command[8]) {
-                case 0x01:
-                    // Cell is defined in the command
-                    slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
-                    channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
-                    if(schedule_isSlotOffsetAvailable(slotOffset)==FALSE){
-                        cellList[0].slotoffset       = slotOffset;
-                        cellList[0].channeloffset    = channel;
-                        cellList[0].isUsed           = TRUE;
-                        whisper_log("Removing cell with offset: %d and channel: %d\n", slotOffset, channel);
-                        break;
-                    }
-                    whisper_log("Defined cell not used, command aborted.\n");
-                    return;
-                case 0x02:
-                    // Choose a random cell
-                    whisper_log("Removing random cells scheduled by whisper is not possible atm.\n");
-                    return;
-                default:
-                    whisper_log("Invalid cell definition, command aborted.\n");
-                    return;
-            }
-
-            if(whisperAddSixtopCellSchedule()) {
-                whisper_log("Automonous cell to target successfully added.\n");
-                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                // call sixtop
-                request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_DELETE,                   // code
-                        &whisper_vars.whisper_sixtop.target, // neighbor
-                        1,                                   // number cells
-                        cellOptions,                         // cellOptions
-                        NULL,                            // celllist to add (not used)
-                        cellList,                                // celllist to delete
-                        msf_getsfid(),                       // sfid
-                        0,                                   // list command offset (not used)
-                        0                                    // list command maximum celllist (not used)
-                );
-            }
             break;
         case IANA_6TOP_CMD_LIST:
-            // Target
-            my_addr->addr_128b[14] = command[3];
-            my_addr->addr_128b[15] = command[4];
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
-
-            // Source
-            my_addr->addr_128b[14] = command[5];
-            my_addr->addr_128b[15] = command[6];
-            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
-
-            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-            // Set ACK receiving ACK adderss to dio target
-            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-            if(whisperAddSixtopCellSchedule()) {
-                whisper_log("Automonous cell to target successfully added.\n");
-                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                // call sixtop
-                request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_LIST,                  // code
-                        &whisper_vars.whisper_sixtop.target,// neighbor
-                        0,                                  // number cells
-                        0,                     // cellOptions
-                        NULL,                       // celllist to add
-                        NULL,                               // celllist to delete (not used)
-                        msf_getsfid(),                      // sfid
-                        0,                                  // list command offset (not used)
-                        0                                   // list command maximum celllist (not used)
-                );
-            }
             break;
         case IANA_6TOP_CMD_CLEAR:
-            // Target
-            my_addr->addr_128b[14] = command[3];
-            my_addr->addr_128b[15] = command[4];
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.target);
-
-            // Source
-            my_addr->addr_128b[14] = command[5];
-            my_addr->addr_128b[15] = command[6];
-            whisper_vars.whisper_sixtop.source.type = ADDR_64B;
-            packetfunctions_ip128bToMac64b(my_addr,&temp,&whisper_vars.whisper_sixtop.source);
-
-            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-            // Set ACK receiving ACK adderss to dio target
-            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-            if(whisperAddSixtopCellSchedule()) {
-                whisper_log("Automonous cell to target successfully added.\n");
-                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                // call sixtop
-                request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_CLEAR,                  // code
-                        &whisper_vars.whisper_sixtop.target, // neighbor
-                        0,                                   // number cells
-                        0,                                   // cellOptions
-                        NULL,                                // celllist to add
-                        NULL,                                // celllist to delete (not used)
-                        msf_getsfid(),                       // sfid
-                        0,                                   // list command offset (not used)
-                        0                                    // list command maximum celllist (not used)
-                );
-            }
             break;
         default:
             whisper_log("Unrecognized 6P command, abort.\n");
@@ -510,8 +425,30 @@ void whisperSixTopCommand(const uint8_t* command, open_addr_t* my_addr) {
     if(request == E_SUCCESS) {
         whisper_log("Sixtop request sent.\n");
         whisper_vars.whisper_ack.acceptACKs = TRUE;
+
+        // Start timer to clean sixtop setting, in case no response is received
+        whisper_vars.state = WHISPER_STATE_SIXTOP;
+        opentimers_scheduleIn(
+                whisper_vars.oneshotTimer,
+                (uint32_t) 10000, // wait 5 seconds
+                TIME_MS,
+                TIMER_ONESHOT,
+                whisperSixtopClearCb
+        );
     }
     else whisper_log("Sixtop request not sent. Something went wrong.\n");
+}
+
+void whisperSixtopClearCb(opentimers_id_t id) {
+    whisper_log("Clearing sixtop settings.\n");
+    if(whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("[SIXTOP] Waiting for response, timed out.\n");
+    if(whisper_vars.whisper_ack.acceptACKs) whisper_log("[SIXTOP] Waiting for ACK, timed out.\n");
+
+    whisper_vars.whisper_sixtop.request_type = 0x00;
+    whisper_vars.whisper_sixtop.seqNum = 0;
+    whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+
+    whisper_vars.state = WHISPER_STATE_IDLE;
 }
 
 

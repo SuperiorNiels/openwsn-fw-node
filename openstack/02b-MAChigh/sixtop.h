@@ -151,17 +151,17 @@ bool      debugPrint_kaPeriod(void);
 void      sixtop_setIsResponseEnabled(bool isEnabled);
 
 
-// scheduling
+// Whisper
+bool sixtop_processIEs(OpenQueueEntry_t* pkt, uint16_t * lenIE);
 owerror_t sixtop_request_Whisper(
         uint8_t      code,
         open_addr_t* neighbor,
-        uint8_t      numCells,
         uint8_t      cellOptions,
-        cellInfo_ht* celllist_toBeAdded,
-        cellInfo_ht* celllist_toBeRemoved,
+        cellInfo_ht* cell, // Whisper only supportes one cell at a time (atm)
         uint8_t      sfid,
         uint16_t     listingOffset,
-        uint16_t     listingMaxNumCells
+        uint16_t     listingMaxNumCells,
+        uint8_t      seqNum
 );
 /**
 \}
