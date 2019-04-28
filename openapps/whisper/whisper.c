@@ -298,10 +298,12 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
 }
 
 bool whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header) {
-    if(packetfunctions_sameAddress(&whisper_vars.whisper_sixtop.target,&ieee802514_header->src)) {
-        if(ieee802514_header->frameType == IEEE154_TYPE_DATA) {
-            whisper_log("Received a response packet from 6p target.\n");
-            return ieee802514_header->ieListPresent;
+    if(whisper_vars.whisper_sixtop.waiting_for_response) {
+        if (packetfunctions_sameAddress(&whisper_vars.whisper_sixtop.target, &ieee802514_header->src)) {
+            if (ieee802514_header->frameType == IEEE154_TYPE_DATA) {
+                whisper_log("Received a response packet from 6p target.\n");
+                return ieee802514_header->ieListPresent;
+            }
         }
     }
     return FALSE;
