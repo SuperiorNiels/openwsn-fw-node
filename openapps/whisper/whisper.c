@@ -236,7 +236,7 @@ void whisperDioCommand(const uint8_t* command) {
 
 // ---------------------- Whisper Sixtop --------------------------
 
-bool whisperAddSixtopCellSchedule() {
+bool whisperSixtopAddAutonomousCell() {
     uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
     uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
     uint16_t slotOffset = msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb));
@@ -253,6 +253,19 @@ bool whisperAddSixtopCellSchedule() {
     }
 
     return icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target);
+}
+
+void whisperSixtopRemoveAutonomousCell() {
+    // Remove autonomous cell
+    if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
+        uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
+        uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
+        schedule_removeActiveSlot(msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb)),
+                                  &whisper_vars.whisper_sixtop.target);
+        whisper_log("Sixtop response received, removing autonomous cell of target.\n");
+        return;
+    }
+    whisper_log("Not removing autonomous cell of target (parent).\n");
 }
 
 void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
@@ -272,17 +285,10 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
                     break;
             }
 
+            whisperSixtopRemoveAutonomousCell();
             whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
             whisper_vars.state = WHISPER_STATE_IDLE;
 
-            // Remove autonomous cell
-            if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
-                uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
-                uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
-                schedule_removeActiveSlot(msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb)),
-                                          &whisper_vars.whisper_sixtop.target);
-                whisper_log("Sixtop response received, removing autonomous cell of target.\n");
-            } else whisper_log("Not removing autonomous cell of target (parent).\n");
         } else {
             whisper_log("Sixtop response received from wrong address.\n");
         }
@@ -346,6 +352,16 @@ bool whisperSixtopParse(const uint8_t* command) {
         whisper_vars.whisper_sixtop.seqNum = neighbors_getSequenceNumber(&whisper_vars.whisper_sixtop.target);
     }
 
+    switch (whisper_vars.whisper_sixtop.request_type) {
+        case IANA_6TOP_CMD_CLEAR:
+        case IANA_6TOP_CMD_LIST:
+        case IANA_6TOP_CMD_COUNT:
+            // No cell creation needed
+            return TRUE;
+        default:
+            break;
+    }
+
     switch(command[9]) {
         case 0x00:
             whisper_vars.whisper_sixtop.cell.isUsed = FALSE;
@@ -392,7 +408,7 @@ void whisperExecuteSixtop() {
             // Set ACK receiving ACK adderss to dio target
             memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
 
-            if(whisperAddSixtopCellSchedule()) {
+            if(whisperSixtopAddAutonomousCell()) {
                 whisper_log("Automonous cell to target successfully added.\n");
                 whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
 
@@ -416,6 +432,34 @@ void whisperExecuteSixtop() {
         case IANA_6TOP_CMD_LIST:
             break;
         case IANA_6TOP_CMD_CLEAR:
+            if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
+               idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
+                whisper_log("Clearing cells with whisper node is not allowed at the moment.\n");
+                return;
+            }
+
+            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+            // Set ACK receiving ACK adderss to dio target
+            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+            if(whisperSixtopAddAutonomousCell()) {
+                whisper_log("Automonous cell to target successfully added.\n");
+                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+                // call sixtop
+                request = sixtop_request_Whisper(
+                        IANA_6TOP_CMD_CLEAR,                   // code
+                        &whisper_vars.whisper_sixtop.target, // neighbor
+                        whisper_vars.whisper_sixtop.cellType, // cellOptions
+                        0,    // cell
+                        msf_getsfid(),                       // sfid
+                        0,                                   // list command offset (not used)
+                        0,                                   // list command maximum celllist (not used)
+                        whisper_vars.whisper_sixtop.seqNum
+                );
+            } else {
+                whisper_log("Failed to add cell to target. 6P response would not be received.\n");
+            }
             break;
         default:
             whisper_log("Unrecognized 6P command, abort.\n");
@@ -444,6 +488,7 @@ void whisperSixtopClearCb(opentimers_id_t id) {
     if(whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("[SIXTOP] Waiting for response, timed out.\n");
     if(whisper_vars.whisper_ack.acceptACKs) whisper_log("[SIXTOP] Waiting for ACK, timed out.\n");
 
+    whisperSixtopRemoveAutonomousCell();
     whisper_vars.whisper_sixtop.request_type = 0x00;
     whisper_vars.whisper_sixtop.seqNum = 0;
     whisper_vars.whisper_sixtop.waiting_for_response = FALSE;

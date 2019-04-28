@@ -72,7 +72,8 @@ void            whisperDioCommand(const uint8_t* command);
 
 // Whisper sixtop
 open_addr_t*    getWhisperSixtopSource();
-bool            whisperAddSixtopCellSchedule();
+bool            whisperSixtopAddAutonomousCell();
+void            whisperSixtopRemoveAutonomousCell();
 bool            whisperSixtopParse(const uint8_t* command);
 void            whisperExecuteSixtop();
 void            whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code);
