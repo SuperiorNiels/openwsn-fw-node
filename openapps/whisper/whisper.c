@@ -347,6 +347,12 @@ bool whisperSixtopParse(const uint8_t* command) {
             return FALSE;
     }
 
+    // No need for extra parsing
+    if(whisper_vars.whisper_sixtop.request_type == IANA_6TOP_CMD_CLEAR) {
+        whisper_vars.whisper_sixtop.seqNum = 0; // does not matter
+        return TRUE;
+    }
+
     // SeqNum
     whisper_vars.whisper_sixtop.seqNum = command[8];
     if(whisper_vars.whisper_sixtop.seqNum == 255) {
@@ -355,7 +361,6 @@ bool whisperSixtopParse(const uint8_t* command) {
     }
 
     switch (whisper_vars.whisper_sixtop.request_type) {
-        case IANA_6TOP_CMD_CLEAR:
         case IANA_6TOP_CMD_LIST:
         case IANA_6TOP_CMD_COUNT:
             // No cell creation needed
