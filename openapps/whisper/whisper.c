@@ -387,7 +387,8 @@ bool whisperSixtopParse(const uint8_t* command) {
 
     switch (whisper_vars.whisper_sixtop.request_type) {
         case IANA_6TOP_CMD_LIST:
-        case IANA_6TOP_CMD_COUNT:
+            whisper_vars.whisper_sixtop.listMaxCells = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
+            whisper_vars.whisper_sixtop.listOffset = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
             // No cell creation needed
             whisper_vars.whisper_sixtop.command_parsed = TRUE;
             return TRUE;
@@ -456,9 +457,9 @@ void whisperExecuteSixtop() {
                 whisper_vars.whisper_sixtop.cellType,      // cellOptions
                 &whisper_vars.whisper_sixtop.cell,         // cell
                 msf_getsfid(),                             // sfid
-                0,                                         // list command offset (not used)
-                0,                                         // list command maximum celllist (not used)
-                whisper_vars.whisper_sixtop.seqNum
+                whisper_vars.whisper_sixtop.listOffset,    // list command offset
+                whisper_vars.whisper_sixtop.listMaxCells,  // list command maximum celllist
+                whisper_vars.whisper_sixtop.seqNum         // Sequence number of 6P message
         );
     } else {
         whisper_log("Failed to add cell to target. 6P response would not be received.\n");
@@ -474,7 +475,7 @@ void whisperExecuteSixtop() {
         whisper_vars.state = WHISPER_STATE_SIXTOP;
         opentimers_scheduleIn(
                 whisper_vars.oneshotTimer,
-                (uint32_t) 10000, // wait 5 seconds
+                (uint32_t) 10000, // wait 10 seconds
                 TIME_MS,
                 TIMER_ONESHOT,
                 whisperSixtopClearCb

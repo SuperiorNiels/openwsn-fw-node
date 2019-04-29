@@ -40,6 +40,8 @@ typedef struct {
     uint8_t         cellType;
     uint8_t         seqNum;
     cellInfo_ht     cell;
+    uint16_t        listMaxCells;
+    uint16_t        listOffset;
     bool            waiting_for_response;
     bool            command_parsed;
 } whisper_sixtop_request_settings;
