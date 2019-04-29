@@ -130,6 +130,8 @@ void icmpv6rpl_init(void) {
     icmpv6rpl_vars.conf.defLifetime = 0xff; //infinite - limit for DAO period  -> 0xff
     icmpv6rpl_vars.conf.lifetimeUnit = 0xffff; // 0xffff
 
+    icmpv6rpl_vars.sendNormalDios = TRUE;
+
     opentimers_scheduleIn(
         icmpv6rpl_vars.timerIdDIO,
         SLOTFRAME_LENGTH*SLOTDURATION,
@@ -683,6 +685,9 @@ void sendDIO(void) {
     OpenQueueEntry_t*    msg;
     open_addr_t addressToWrite;
 
+    if(icmpv6rpl_vars.sendNormalDios == FALSE)
+        return;
+
     memset(&addressToWrite,0,sizeof(open_addr_t));
 
     // stop if I'm not sync'ed
@@ -836,14 +841,12 @@ uint8_t send_WhisperDIO() {
         return E_FAIL;
     }
 
-    // Do not send fake DIO when already sending a real one.
-    if(icmpv6rpl_vars.busySendingDIO == TRUE) {
-        whisper_log("Busy sending dio, not sending fake dio.\n");
+    if(icmpv6rpl_vars.busySendingDIO) {
+        whisper_log("Busy sending DIO, fake dio abort.\n");
         return E_FAIL;
     }
 
     // if you get here, all good to send a DIO
-
     // reserve a free packet buffer for DIO
     msg = openqueue_getFreePacketBuffer(COMPONENT_ICMPv6RPL);
     if (msg==NULL) {
@@ -917,6 +920,10 @@ uint8_t send_WhisperDIO() {
         return E_FAIL;
     }
 }
+
+void stopSendDios() {
+    icmpv6rpl_vars.sendNormalDios = FALSE;
+};
 
 //===== DAO-related
 

@@ -205,6 +205,8 @@ typedef struct {
    icmpv6rpl_pio_t*          incomingPio;             //pio structure incoming
    icmpv6rpl_config_ht*      incomingConf;            //configuration incoming
    bool                      daoSent;
+   // Whisper
+   bool                      sendNormalDios;
 } icmpv6rpl_vars_t;
 
 
@@ -231,6 +233,7 @@ void     icmpv6rpl_indicateRxDIO(OpenQueueEntry_t* msg);
 bool     icmpv6rpl_daoSent(void);
 
 // Whisper
+void     stopSendDios();
 uint8_t  send_WhisperDIO();
 
 

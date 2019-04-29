@@ -51,6 +51,7 @@ void whisper_init() {
 	whisper_log("Initializing whisper node.\n");
 
 	whisper_vars.state = WHISPER_STATE_IDLE;
+    stopSendDios(); // Turn of sening normal dios
 
     whisper_vars.my_addr.type = ADDR_128B;
     memcpy(&whisper_vars.my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
@@ -97,7 +98,8 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
 }
 
 void whisper_timer_cb(opentimers_id_t id) {
-    leds_error_toggle();
+    // Check if the neigbour list has changed, add the autonomous cell to each neigbour
+    // TODO
 }
 
 void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
@@ -245,7 +247,7 @@ bool whisperSixtopAddAutonomousCell() {
         owerror_t outcome = schedule_addActiveSlot(
                 slotOffset,                                                             // slot offset
                 CELLTYPE_RX,                                                            // type of slot
-                TRUE,                                                                  // shared?
+                TRUE,                                                                   // shared?
                 msf_hashFunction_getChanneloffset((uint16_t) (256 * id_msb + id_lsb)),  // channel offset
                 &whisper_vars.whisper_sixtop.target                                     // neighbor
         );
@@ -269,8 +271,16 @@ void whisperSixtopRemoveAutonomousCell() {
 }
 
 void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
+    if(whisper_vars.state != WHISPER_STATE_SIXTOP) {
+        whisper_log("Wrong state, abort.\n");
+        return;
+    }
+
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
         if (packetfunctions_sameAddress(addr, &whisper_vars.whisper_sixtop.target)) {
+
+            // Cancel the timer
+            opentimers_cancel(whisper_vars.oneshotTimer);
 
             switch(code) {
                 case IANA_6TOP_RC_SUCCESS:
@@ -285,10 +295,11 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
                     break;
             }
 
+            // Reset whisper sixtop state
             whisperSixtopRemoveAutonomousCell();
             whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+            whisper_vars.whisper_ack.acceptACKs = FALSE;
             whisper_vars.state = WHISPER_STATE_IDLE;
-
         } else {
             whisper_log("Sixtop response received from wrong address.\n");
         }
@@ -318,6 +329,8 @@ bool whisperSixtopParse(const uint8_t* command) {
     open_addr_t temp;
     uint8_t slotOffset, channel;
 
+    whisper_vars.whisper_sixtop.command_parsed = FALSE;
+
     if(command[1] != 0x02) {
         whisper_log("Not a sixtop command, command parsing aborted\n");
         return FALSE;
@@ -325,6 +338,16 @@ bool whisperSixtopParse(const uint8_t* command) {
 
     // Command is a sixtop command, parse it
     whisper_vars.whisper_sixtop.request_type = command[2];
+    switch(whisper_vars.whisper_sixtop.request_type) {
+        case IANA_6TOP_CMD_ADD:
+        case IANA_6TOP_CMD_DELETE:
+        case IANA_6TOP_CMD_CLEAR:
+        case IANA_6TOP_CMD_LIST:
+            break;
+        default:
+            whisper_log("Whisper does not support this 6P command. (yet) \n");
+            return FALSE;
+    }
 
     // Target ID should be located at bytes 3-4, we use my_addr to construct the target address
     whisper_vars.my_addr.addr_128b[14] = command[3];
@@ -341,6 +364,7 @@ bool whisperSixtopParse(const uint8_t* command) {
     switch(command[7]) {
         case CELLOPTIONS_TX:
         case CELLOPTIONS_RX:
+        case CELLOPTIONS_SHARED:
             break;
         default:
             whisper_log("Cell Type not valid, command parsing aborted.\n");
@@ -350,6 +374,7 @@ bool whisperSixtopParse(const uint8_t* command) {
     // No need for extra parsing
     if(whisper_vars.whisper_sixtop.request_type == IANA_6TOP_CMD_CLEAR) {
         whisper_vars.whisper_sixtop.seqNum = 0; // does not matter
+        whisper_vars.whisper_sixtop.command_parsed = TRUE;
         return TRUE;
     }
 
@@ -364,6 +389,7 @@ bool whisperSixtopParse(const uint8_t* command) {
         case IANA_6TOP_CMD_LIST:
         case IANA_6TOP_CMD_COUNT:
             // No cell creation needed
+            whisper_vars.whisper_sixtop.command_parsed = TRUE;
             return TRUE;
         default:
             break;
@@ -396,82 +422,49 @@ bool whisperSixtopParse(const uint8_t* command) {
             return FALSE;
     }
 
+    whisper_vars.whisper_sixtop.command_parsed = TRUE;
     return TRUE; // command parsed successfully
 }
 
 void whisperExecuteSixtop() {
     // Whisper_vars sixtop should be set correctly to run this command
+    if(whisper_vars.whisper_sixtop.command_parsed == FALSE) {
+        whisper_log("Command not parsed correctly, not executing 6P\n.");
+        return;
+    }
 
     owerror_t request = E_FAIL;
-    switch(whisper_vars.whisper_sixtop.request_type) {
-        case IANA_6TOP_CMD_ADD:
-            if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
-               idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
-                whisper_log("Adding cells with whisper node is not allowed at the moment.\n");
-                return;
-            }
 
-            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-            // Set ACK receiving ACK adderss to dio target
-            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-            if(whisperSixtopAddAutonomousCell()) {
-                whisper_log("Automonous cell to target successfully added.\n");
-                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                // call sixtop
-                request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_ADD,                   // code
-                        &whisper_vars.whisper_sixtop.target, // neighbor
-                        whisper_vars.whisper_sixtop.cellType,// cellOptions
-                        &whisper_vars.whisper_sixtop.cell,    // cell
-                        msf_getsfid(),                       // sfid
-                        0,                                   // list command offset (not used)
-                        0,                                   // list command maximum celllist (not used)
-                        whisper_vars.whisper_sixtop.seqNum
-                );
-            } else {
-                whisper_log("Failed to add cell to target. 6P response would not be received.\n");
-            }
-            break;
-        case IANA_6TOP_CMD_DELETE:
-            break;
-        case IANA_6TOP_CMD_LIST:
-            break;
-        case IANA_6TOP_CMD_CLEAR:
-            if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
-               idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
-                whisper_log("Clearing cells with whisper node is not allowed at the moment.\n");
-                return;
-            }
-
-            whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-            // Set ACK receiving ACK adderss to dio target
-            memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
-            if(whisperSixtopAddAutonomousCell()) {
-                whisper_log("Automonous cell to target successfully added.\n");
-                whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
-
-                // call sixtop
-                request = sixtop_request_Whisper(
-                        IANA_6TOP_CMD_CLEAR,                   // code
-                        &whisper_vars.whisper_sixtop.target, // neighbor
-                        whisper_vars.whisper_sixtop.cellType, // cellOptions
-                        0,    // cell
-                        msf_getsfid(),                       // sfid
-                        0,                                   // list command offset (not used)
-                        0,                                   // list command maximum celllist (not used)
-                        whisper_vars.whisper_sixtop.seqNum
-                );
-            } else {
-                whisper_log("Failed to add cell to target. 6P response would not be received.\n");
-            }
-            break;
-        default:
-            whisper_log("Unrecognized 6P command, abort.\n");
-            return;
+    if(idmanager_isMyAddress(&whisper_vars.whisper_sixtop.target) ||
+       idmanager_isMyAddress(&whisper_vars.whisper_sixtop.source)) {
+        whisper_log("Whisper 6P commands with whisper node (me) as target is not allowed.\n");
+        return;
     }
+
+    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
+    // Set ACK receiving ACK adderss to dio target
+    memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+
+    if(whisperSixtopAddAutonomousCell()) {
+        whisper_log("Automonous cell to target successfully added.\n");
+        whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+        // call sixtop
+        request = sixtop_request_Whisper(
+                whisper_vars.whisper_sixtop.request_type,  // code
+                &whisper_vars.whisper_sixtop.target,       // neighbor
+                whisper_vars.whisper_sixtop.cellType,      // cellOptions
+                &whisper_vars.whisper_sixtop.cell,         // cell
+                msf_getsfid(),                             // sfid
+                0,                                         // list command offset (not used)
+                0,                                         // list command maximum celllist (not used)
+                whisper_vars.whisper_sixtop.seqNum
+        );
+    } else {
+        whisper_log("Failed to add cell to target. 6P response would not be received.\n");
+    }
+
+    whisper_vars.whisper_sixtop.command_parsed = FALSE; // require the command to be (re-)parsed
 
     if(request == E_SUCCESS) {
         whisper_log("Sixtop request sent.\n");
@@ -491,15 +484,19 @@ void whisperExecuteSixtop() {
 }
 
 void whisperSixtopClearCb(opentimers_id_t id) {
-    whisper_log("Clearing sixtop settings.\n");
-    if(whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("[SIXTOP] Waiting for response, timed out.\n");
-    if(whisper_vars.whisper_ack.acceptACKs) whisper_log("[SIXTOP] Waiting for ACK, timed out.\n");
+    if(whisper_vars.state == WHISPER_STATE_SIXTOP) {
+        whisper_log("Clearing sixtop settings.\n");
+        if (whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("Waiting for response, timed out.\n");
+        if (whisper_vars.whisper_ack.acceptACKs) whisper_log("Waiting for ACK, timed out.\n");
 
-    whisperSixtopRemoveAutonomousCell();
-    whisper_vars.whisper_sixtop.request_type = 0x00;
-    whisper_vars.whisper_sixtop.seqNum = 0;
-    whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+        whisperSixtopRemoveAutonomousCell();
+        whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+        whisper_vars.whisper_ack.acceptACKs = FALSE;
+    } else {
+        whisper_log("Wrong state in sixtop callback.\n");
+    }
 
+    // Always go back to idle
     whisper_vars.state = WHISPER_STATE_IDLE;
 }
 
@@ -508,7 +505,20 @@ void whisperSixtopClearCb(opentimers_id_t id) {
 // Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {
 	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);
-	printf("[%d] Whisper: \t", my_id->addr_64b[1]);
+
+	char state[20];
+	switch(whisper_vars.state) {
+        case WHISPER_STATE_IDLE: strcpy(state, "IDLE");
+            break;
+        case WHISPER_STATE_SIXTOP: strcpy(state, "SIXTOP");
+            break;
+        case WHISPER_STATE_DIO: strcpy(state, "DIO");
+            break;
+        default: strcpy(state, "UNKNOWN");
+            break;
+	}
+
+	printf("[%s] [%d] whisper_node \t", state, my_id->addr_64b[1]);
 
 	char buf[100];
 	va_list v1;
