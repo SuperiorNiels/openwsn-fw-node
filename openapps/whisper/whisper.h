@@ -30,7 +30,8 @@ typedef struct {
 
 typedef struct {
     bool        acceptACKs;
-    open_addr_t acceptACKaddr;
+    open_addr_t ACKsrc;
+    open_addr_t ACKdest;
 } whisper_ack_sniffing;
 
 typedef struct {
@@ -86,7 +87,7 @@ void            whisperSixtopClearCb(opentimers_id_t id); // callback for timer
 bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);
 
 // Whisper ACK Sniffing
-bool whisperACKreceive(open_addr_t *l2_ack_addr);
+bool            whisperACKreceive(ieee802154_header_iht* ieee802154_header);
 
 // Logging (should be removed for openmote build, no printf..)
 void whisper_log(char* msg, ...);

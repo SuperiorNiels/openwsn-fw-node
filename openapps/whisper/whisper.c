@@ -192,9 +192,10 @@ open_addr_t* getWhisperSixtopSource() {
     return &whisper_vars.whisper_sixtop.source;
 }
 
-bool whisperACKreceive(open_addr_t *l2_ack_addr) {
+bool whisperACKreceive(ieee802154_header_iht* ieee802154_header) {
     if(whisper_vars.whisper_ack.acceptACKs == TRUE) {
-        if(packetfunctions_sameAddress(l2_ack_addr, &whisper_vars.whisper_ack.acceptACKaddr)) {
+        if(packetfunctions_sameAddress(&ieee802154_header->src, &whisper_vars.whisper_ack.ACKsrc) &&
+            packetfunctions_sameAddress(&ieee802154_header->dest, &whisper_vars.whisper_ack.ACKdest)) {
             whisper_log("ACK received.\n");
             whisper_vars.whisper_ack.acceptACKs = FALSE;
             return TRUE;
@@ -227,9 +228,11 @@ void whisperDioCommand(const uint8_t* command) {
 
     // If DIO is send successfully (to lower layers) activate ACK sniffing if the parent is not myself
     if(result == E_SUCCESS && (idmanager_isMyAddress(&whisper_vars.whisper_dio.parent) == FALSE)) {
-        whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-        // Set ACK receiving ACK adderss to dio target
-        packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.acceptACKaddr);
+        // Set ACK addresses
+        whisper_vars.whisper_ack.ACKsrc.type = ADDR_64B;
+        packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.target,&temp,&whisper_vars.whisper_ack.ACKsrc);
+        whisper_vars.whisper_ack.ACKdest.type = ADDR_64B;
+        packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.parent,&temp,&whisper_vars.whisper_ack.ACKdest);
         whisper_vars.whisper_ack.acceptACKs = TRUE;
     }
 
@@ -442,12 +445,14 @@ void whisperExecuteSixtop() {
         return;
     }
 
-    whisper_vars.whisper_ack.acceptACKaddr.type = ADDR_64B;
-    // Set ACK receiving ACK adderss to dio target
-    memcpy(&whisper_vars.whisper_ack.acceptACKaddr,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
-
     if(whisperSixtopAddAutonomousCell()) {
         whisper_log("Automonous cell to target successfully added.\n");
+
+        // Set ACK addresses
+        whisper_vars.whisper_ack.ACKsrc.type = ADDR_64B;
+        memcpy(&whisper_vars.whisper_ack.ACKsrc,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+        whisper_vars.whisper_ack.ACKdest.type = ADDR_64B;
+        memcpy(&whisper_vars.whisper_ack.ACKdest,&whisper_vars.whisper_sixtop.source, sizeof(open_addr_t));
         whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
 
         // call sixtop

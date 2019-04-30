@@ -1579,12 +1579,19 @@ port_INLINE void activity_ti9(PORT_TIMER_WIDTH capturedTime) {
         packetfunctions_tossHeader(ieee154e_vars.ackReceived,ieee802514_header.headerLength);
 
         // break if invalid ACK
+        bool syncACK = TRUE;
         if (isValidAck(&ieee802514_header,ieee154e_vars.dataToSend)==FALSE) {
-            // break from the do-while loop and execute the clean-up code below
-            break;
+            // Check if the ACK is valid for whisper
+            if(whisperACKreceive(&ieee802514_header)) {
+                whisper_log("Received ACK to whisper command.\n");
+                syncACK = FALSE;
+            } else {
+                // break from the do-while loop and execute the clean-up code below
+                break;
+            }
         }
 
-        if (idmanager_getIsDAGroot()==FALSE &&
+        if (idmanager_getIsDAGroot()==FALSE && syncACK &&
             icmpv6rpl_isPreferredParent(&(ieee154e_vars.ackReceived->l2_nextORpreviousHop))
         ) {
             synchronizeAck(ieee802514_header.timeCorrection);
@@ -2273,8 +2280,7 @@ port_INLINE bool isValidAck(ieee802154_header_iht* ieee802514_header, OpenQueueE
     return ieee802514_header->valid==TRUE                                                        && \
         ieee802514_header->frameType==IEEE154_TYPE_ACK                                           && \
         packetfunctions_sameAddress(&ieee802514_header->panid,idmanager_getMyID(ADDR_PANID))     && \
-        (idmanager_isMyAddress(&ieee802514_header->dest)
-        || whisperACKreceive(&ieee802514_header->src))                                        && \
+        idmanager_isMyAddress(&ieee802514_header->dest)                                          && \
         packetfunctions_sameAddress(&ieee802514_header->src,&packetSent->l2_nextORpreviousHop);
 }
 
