@@ -111,6 +111,9 @@ void          neighbors_removeOld(void);
 // debug
 bool          debugPrint_neighbors(void);
 
+// Whisper
+void          neighbors_updateAutonomousCells();
+
 /**
 \}
 \}

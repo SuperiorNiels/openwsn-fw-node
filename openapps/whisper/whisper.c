@@ -51,7 +51,7 @@ void whisper_init() {
 	whisper_log("Initializing whisper node.\n");
 
 	whisper_vars.state = WHISPER_STATE_IDLE;
-    stopSendDios(); // Turn of sening normal dios
+    stopSendDios(); // Turn of sending normal dios
 
     whisper_vars.my_addr.type = ADDR_128B;
     memcpy(&whisper_vars.my_addr.addr_128b, 		idmanager_getMyID(ADDR_PREFIX)->prefix, 8);
@@ -66,8 +66,6 @@ void whisper_init() {
 	whisper_vars.desc.discoverable         = TRUE;
 	whisper_vars.desc.callbackRx           = &whisper_receive;
 	whisper_vars.desc.callbackSendDone     = &whisper_sendDone;
-
-    whisper_setState(0);
 
 	// register with the CoAP module
 	opencoap_register(&whisper_vars.desc);
@@ -94,12 +92,62 @@ uint8_t whisper_getState() {
 }
 
 void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
+    if(error == E_SUCCESS) {
+        if (whisper_vars.state == WHISPER_STATE_WAIT_COAP) {
+            // Coap PUT received and coap message is correctly handled
+            switch (whisper_vars.payloadBuffer[1]) {
+                case 0x01:
+                    whisper_log("Whisper fake dio command (remote)\n");
+                    whisperDioCommand(whisper_vars.payloadBuffer);
+                    break;
+                case 0x02:
+                    whisper_log("Whisper 6P command (remote).\n");
+                    if (whisperSixtopParse(whisper_vars.payloadBuffer)) whisperExecuteSixtop();
+                    else whisper_log("Parsing command failed.\n");
+                    break;
+                default:
+                    whisper_log("Command not found: %d.\n", whisper_vars.payloadBuffer[1]);
+                    break;
+            }
+        } else {
+            whisper_log("Not the correct state to perform whisper command.\n");
+        }
+    }
+
+    whisper_log("Removing packet.\n");
     openqueue_freePacketBuffer(msg);
+}
+
+void whisperClearStateCb(opentimers_id_t id) {
+    if (whisper_vars.whisper_ack.acceptACKs) whisper_log("Waiting for ACK, timed out.\n");
+
+    switch(whisper_vars.state) {
+        case WHISPER_STATE_SIXTOP:
+            whisper_log("Clearing sixtop settings.\n");
+            if (whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("Waiting for response, timed out.\n");
+            whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+            break;
+        case WHISPER_STATE_DIO:
+            whisper_log("Clearing whisper dio settings");
+            // nothing to do, check is ACK is received
+            break;
+        case WHISPER_STATE_WAIT_COAP:
+            whisper_log("Waiting for CoAP, command aborted.\n");
+            break;
+        default:
+            whisper_log("Unkown state.\n");
+            break;
+    }
+
+    // Always go back to idle
+    whisper_vars.state = WHISPER_STATE_IDLE;
+    whisper_vars.whisper_ack.acceptACKs = FALSE;
+    whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
 }
 
 void whisper_timer_cb(opentimers_id_t id) {
     // Check if the neigbour list has changed, add the autonomous cell to each neigbour
-    // TODO
+    neighbors_updateAutonomousCells();
 }
 
 void whisper_task_remote(uint8_t* buf, uint8_t bufLen) {
@@ -112,7 +160,7 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 						coap_option_iht*  coap_outgoingOptions,
 						uint8_t*          coap_outgoingOptionsLen)
 {
-	owerror_t outcome;
+	owerror_t outcome = E_FAIL;
 
 	switch (coap_header->Code) {
 		case COAP_CODE_REQ_GET:
@@ -136,23 +184,22 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
             // Don's execute command if state is not idle
             if(whisper_vars.state == WHISPER_STATE_IDLE) {
-                switch(msg->payload[1]) {
-                    case 0x01:
-                        whisper_log("Whisper fake dio command (remote)\n");
-                        whisperDioCommand(msg->payload);
-                        break;
-                    case 0x02:
-                        whisper_log("Whisper 6P command (remote).\n");
-                        if(whisperSixtopParse(msg->payload)) whisperExecuteSixtop();
-                        else whisper_log("Parsing command failed.\n");
-                        break;
-                    default:
-                        break;
+                if(msg->length <= 30) {
+                    memcpy(whisper_vars.payloadBuffer, msg->payload, msg->length);
+                    whisper_vars.state = WHISPER_STATE_WAIT_COAP;
+                    // Start timer to clean up (in any event)
+                    opentimers_scheduleIn(
+                            whisper_vars.oneshotTimer,
+                            (uint32_t) 10000, // wait 10 seconds
+                            TIME_MS,
+                            TIMER_ONESHOT,
+                            whisperClearStateCb
+                    );
+                } else {
+                    whisper_log("Message payload to long.\n");
                 }
             } else {
                 whisper_log("Whisper node not idle, abort.\n");
-                // Notify controller
-                break;
             }
 
             // reset packet payload
@@ -220,7 +267,7 @@ void whisperDioCommand(const uint8_t* command) {
     // Next Hop == target
     memcpy(&whisper_vars.whisper_dio.nextHop, &whisper_vars.whisper_dio.target, sizeof(open_addr_t));
 
-    whisper_vars.whisper_dio.rank = (uint16_t) ((uint16_t) command[8] << 8) | (uint16_t ) command[9];
+    whisper_vars.whisper_dio.rank = (uint16_t) (command[8] << 8) | (uint16_t ) command[9];
 
     whisper_log("Sending fake DIO with rank %d.\n", whisper_vars.whisper_dio.rank);
 
@@ -240,38 +287,6 @@ void whisperDioCommand(const uint8_t* command) {
 }
 
 // ---------------------- Whisper Sixtop --------------------------
-
-bool whisperSixtopAddAutonomousCell() {
-    uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
-    uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
-    uint16_t slotOffset = msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb));
-
-    if(schedule_isSlotOffsetAvailable(slotOffset)) {
-        owerror_t outcome = schedule_addActiveSlot(
-                slotOffset,                                                             // slot offset
-                CELLTYPE_RX,                                                            // type of slot
-                TRUE,                                                                   // shared?
-                msf_hashFunction_getChanneloffset((uint16_t) (256 * id_msb + id_lsb)),  // channel offset
-                &whisper_vars.whisper_sixtop.target                                     // neighbor
-        );
-        return (uint8_t) (outcome == E_SUCCESS);
-    }
-
-    return icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target);
-}
-
-void whisperSixtopRemoveAutonomousCell() {
-    // Remove autonomous cell
-    if (icmpv6rpl_isPreferredParent(&whisper_vars.whisper_sixtop.target) == FALSE) {
-        uint8_t id_lsb = whisper_vars.whisper_sixtop.target.addr_64b[7];
-        uint8_t id_msb = whisper_vars.whisper_sixtop.target.addr_64b[6];
-        schedule_removeActiveSlot(msf_hashFunction_getSlotoffset((uint16_t) (256 * id_msb + id_lsb)),
-                                  &whisper_vars.whisper_sixtop.target);
-        whisper_log("Sixtop response received, removing autonomous cell of target.\n");
-        return;
-    }
-    whisper_log("Not removing autonomous cell of target (parent).\n");
-}
 
 void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
     if(whisper_vars.state != WHISPER_STATE_SIXTOP) {
@@ -298,8 +313,6 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
                     break;
             }
 
-            // Reset whisper sixtop state
-            whisperSixtopRemoveAutonomousCell();
             whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
             whisper_vars.whisper_ack.acceptACKs = FALSE;
             whisper_vars.state = WHISPER_STATE_IDLE;
@@ -431,7 +444,7 @@ bool whisperSixtopParse(const uint8_t* command) {
 }
 
 void whisperExecuteSixtop() {
-    // Whisper_vars sixtop should be set correctly to run this command
+    // The command should be parsed successfully in the whisper_vars
     if(whisper_vars.whisper_sixtop.command_parsed == FALSE) {
         whisper_log("Command not parsed correctly, not executing 6P\n.");
         return;
@@ -445,7 +458,7 @@ void whisperExecuteSixtop() {
         return;
     }
 
-    if(whisperSixtopAddAutonomousCell()) {
+    if(schedule_getAutonomousTxRxCellUnicastNeighbor(&whisper_vars.whisper_sixtop.target)) {
         whisper_log("Automonous cell to target successfully added.\n");
 
         // Set ACK addresses
@@ -475,37 +488,10 @@ void whisperExecuteSixtop() {
     if(request == E_SUCCESS) {
         whisper_log("Sixtop request sent.\n");
         whisper_vars.whisper_ack.acceptACKs = TRUE;
-
-        // Start timer to clean sixtop setting, in case no response is received
         whisper_vars.state = WHISPER_STATE_SIXTOP;
-        opentimers_scheduleIn(
-                whisper_vars.oneshotTimer,
-                (uint32_t) 10000, // wait 10 seconds
-                TIME_MS,
-                TIMER_ONESHOT,
-                whisperSixtopClearCb
-        );
     }
     else whisper_log("Sixtop request not sent. Something went wrong.\n");
 }
-
-void whisperSixtopClearCb(opentimers_id_t id) {
-    if(whisper_vars.state == WHISPER_STATE_SIXTOP) {
-        whisper_log("Clearing sixtop settings.\n");
-        if (whisper_vars.whisper_sixtop.waiting_for_response) whisper_log("Waiting for response, timed out.\n");
-        if (whisper_vars.whisper_ack.acceptACKs) whisper_log("Waiting for ACK, timed out.\n");
-
-        whisperSixtopRemoveAutonomousCell();
-        whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
-        whisper_vars.whisper_ack.acceptACKs = FALSE;
-    } else {
-        whisper_log("Wrong state in sixtop callback.\n");
-    }
-
-    // Always go back to idle
-    whisper_vars.state = WHISPER_STATE_IDLE;
-}
-
 
 // ============================================================================================
 // Logging (should be removed for openmote build, no printf)
@@ -519,6 +505,8 @@ void whisper_log(char* msg, ...) {
         case WHISPER_STATE_SIXTOP: strcpy(state, "SIXTOP");
             break;
         case WHISPER_STATE_DIO: strcpy(state, "DIO");
+            break;
+        case WHISPER_STATE_WAIT_COAP: strcpy(state, "WAIT_COAP");
             break;
         default: strcpy(state, "UNKNOWN");
             break;

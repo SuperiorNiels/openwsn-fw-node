@@ -988,7 +988,7 @@ port_INLINE void activity_ti1ORri1(void) {
                         // this is minimal cell
                         ieee154e_vars.dataToSend = openqueue_macGetDIOPacket();
 
-                        // Added for whisper to send 6p commands during a shared cell
+                        /*// Added for whisper to send 6p commands during a shared cell
                         if(ieee154e_vars.dataToSend == NULL) {
                             ieee154e_vars.dataToSend = openqueue_macGet6PandJoinPacket(&neighbor);
                             if(ieee154e_vars.dataToSend != NULL) {
@@ -996,7 +996,7 @@ port_INLINE void activity_ti1ORri1(void) {
                                     whisper_log("Sending 6p in shared cell.\n");
                                 }
                             }
-                        }
+                        }*/
 
                         if (ieee154e_vars.dataToSend==NULL) {
                             couldSendEB=TRUE;
