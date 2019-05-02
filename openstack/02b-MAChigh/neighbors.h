@@ -113,6 +113,7 @@ bool          debugPrint_neighbors(void);
 
 // Whisper
 void          neighbors_updateAutonomousCells();
+bool          isNeighbor(open_addr_t* neighbor);
 
 /**
 \}

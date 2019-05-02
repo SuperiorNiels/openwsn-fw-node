@@ -1874,9 +1874,14 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
         ieee154e_vars.dataReceived->is6pFake = FALSE;
         if (isValidRxFrame(&ieee802514_header)==FALSE) {
             if(whisperSixtopPacketAccept(&ieee802514_header)) {
+                // Packet is part of whisper 6p transaction
                 whisper_log("Invalid RX frame (not for me): whisper 6P response received.\n");
                 ieee154e_vars.dataReceived->is6pFake = TRUE;
-            } else break; // jump to the error code below this do-while loop
+            } else {
+                // Packet could be 6P transaction between other nodes ==> process for information
+                whisperGetNeighborInfoFromSixtop(&ieee802514_header, ieee154e_vars.dataReceived);
+                break; // jump to the error code below this do-while loop
+            }
         }
 
         // record the timeCorrection and print out at end of slot

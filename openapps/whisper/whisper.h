@@ -13,6 +13,8 @@
 
 //=========================== define ==========================================
 
+#define SIXTOP_MAX_LINK_SNIFFING 20 // number of links to keep track of
+
 #define WHISPER_STATE_IDLE      0x00
 #define WHISPER_STATE_SIXTOP    0x01
 #define WHISPER_STATE_DIO       0x02
@@ -21,6 +23,17 @@
 //=========================== typedef =========================================
 
 //=========================== variables =======================================
+
+typedef struct {
+    uint8_t srcId[2];
+    uint8_t destId[2];
+    uint8_t seqNum;
+    bool    active;
+} whisper_sixtop_link;
+
+typedef struct {
+    whisper_sixtop_link sixtop[SIXTOP_MAX_LINK_SNIFFING];
+} whisper_neighbor_info;
 
 typedef struct {
     open_addr_t	target;
@@ -60,6 +73,7 @@ typedef struct {
     whisper_ack_sniffing whisper_ack;
     whisper_dio_settings whisper_dio;
     whisper_sixtop_request_settings whisper_sixtop;
+    whisper_neighbor_info neighbors;
 } whisper_vars_t;
 
 //=========================== prototypes ======================================
@@ -85,9 +99,17 @@ void            whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code);
 void            whisperSixtopProcessIE(OpenQueueEntry_t* pkt);
 
 bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);
+void            whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEntry_t* msg);
 
 // Whisper ACK Sniffing
 bool            whisperACKreceive(ieee802154_header_iht* ieee802154_header);
+
+// helper functions
+void            whisperUpdateOrAddSixtopLinkInfo(open_addr_t* src, open_addr_t* dest, uint8_t seqNum);
+bool            isMatchingSixtopLink(uint8_t link_index, const uint8_t* srcID, const uint8_t* destID);
+bool            addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum);
+bool            getSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t* seqNum);
+void            updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum);
 
 // Logging (should be removed for openmote build, no printf..)
 void            whisper_log(char* msg, ...);

@@ -459,14 +459,25 @@ void whisperExecuteSixtop() {
     }
 
     if(schedule_getAutonomousTxRxCellUnicastNeighbor(&whisper_vars.whisper_sixtop.target)) {
-        whisper_log("Automonous cell to target successfully added.\n");
-
         // Set ACK addresses
         whisper_vars.whisper_ack.ACKsrc.type = ADDR_64B;
         memcpy(&whisper_vars.whisper_ack.ACKsrc,&whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
         whisper_vars.whisper_ack.ACKdest.type = ADDR_64B;
         memcpy(&whisper_vars.whisper_ack.ACKdest,&whisper_vars.whisper_sixtop.source, sizeof(open_addr_t));
         whisper_vars.whisper_sixtop.waiting_for_response = TRUE;
+
+        // Get seqNum
+        uint8_t srcID[2] = {whisper_vars.whisper_sixtop.source.addr_64b[6], whisper_vars.whisper_sixtop.source.addr_64b[7]};
+        uint8_t destID[2] = {whisper_vars.whisper_sixtop.target.addr_64b[6], whisper_vars.whisper_sixtop.target.addr_64b[7]};
+
+        uint8_t seqNum;
+        if(getSixtopLinkSeqNum(srcID, destID, &seqNum) == FALSE) {
+            whisper_log("No link found in memory, sending 6P command with seqNum 0.\n");
+            seqNum = 0;
+            addSixtopLink(srcID, destID, 1);
+        } else {
+            updateSixtopLinkSeqNum(srcID, destID, seqNum + 1);
+        }
 
         // call sixtop
         request = sixtop_request_Whisper(
@@ -477,7 +488,7 @@ void whisperExecuteSixtop() {
                 msf_getsfid(),                             // sfid
                 whisper_vars.whisper_sixtop.listOffset,    // list command offset
                 whisper_vars.whisper_sixtop.listMaxCells,  // list command maximum celllist
-                whisper_vars.whisper_sixtop.seqNum         // Sequence number of 6P message
+                seqNum                                     // Sequence number of 6P message
         );
     } else {
         whisper_log("Failed to add cell to target. 6P response would not be received.\n");
@@ -491,6 +502,117 @@ void whisperExecuteSixtop() {
         whisper_vars.state = WHISPER_STATE_SIXTOP;
     }
     else whisper_log("Sixtop request not sent. Something went wrong.\n");
+}
+
+void whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEntry_t* msg) {
+    if( (idmanager_isMyAddress(&header->src) == FALSE && idmanager_isMyAddress(&header->dest) == FALSE) &&
+        (isNeighbor(&header->src) && isNeighbor(&header->dest)) &&
+        (header->ieListPresent == TRUE && header->frameType == IEEE154_TYPE_DATA))
+    {
+        uint8_t ptr = 0;
+        uint8_t temp_8b, subtypeid, code, sfid, seqNum;
+        uint16_t temp_16b;
+        whisper_log("Received 6p packet from transaction between other nodes: processing for information.\n");
+
+        // First check if the IE header is valid
+        temp_8b     = *((uint8_t*)(msg->payload)+ptr);
+        ptr++;
+        temp_16b    = temp_8b + ((*((uint8_t*)(msg->payload)+ptr))<<8);
+        ptr++;
+        // check ietf ie group id, type
+        if ((temp_16b & IEEE802154E_DESC_LEN_PAYLOAD_ID_TYPE_MASK) != (IANA_IETF_IE_GROUP_ID | IANA_IETF_IE_TYPE))
+            return;
+
+        // check 6p subtype Id
+        subtypeid  = *((uint8_t*)(msg->payload)+ptr);
+        ptr += 2; // this way we skip the 6p version field
+        if (subtypeid != IANA_6TOP_SUBIE_ID) return;
+
+        // get 6p code
+        code       = *((uint8_t*)(msg->payload)+ptr);
+        ptr       += 1;
+
+        // get 6p sfid
+        sfid       = *((uint8_t*)(msg->payload)+ptr);
+        ptr       += 1;
+
+        // get 6p seqNum
+        seqNum     =  *((uint8_t*)(msg->payload)+ptr) & 0xff;
+
+        if(sfid == msf_getsfid()) {
+            // Same sfid, store the seqNum for the link
+            seqNum++;
+            whisper_log("Received seqNum: %d.\n", seqNum);
+            whisper_log("SRC: "); whisper_print_address(&header->src);
+            whisper_log("DEST: "); whisper_print_address(&header->dest);
+            whisperUpdateOrAddSixtopLinkInfo(&header->src, &header->dest, seqNum);
+        }
+    }
+}
+
+// ------------ Helper functions ------------------
+
+void whisperUpdateOrAddSixtopLinkInfo(open_addr_t* src, open_addr_t* dest, uint8_t seqNum) {
+    uint8_t srcID[2] = {src->addr_64b[6], src->addr_64b[7]};
+    uint8_t destID[2] = {dest->addr_64b[6], dest->addr_64b[7]};
+
+    for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
+        if(isMatchingSixtopLink(i, srcID, destID)) {
+            // update seqNum
+            whisper_vars.neighbors.sixtop->seqNum = seqNum;
+            whisper_vars.neighbors.sixtop->active = TRUE;
+            return;
+        }
+    }
+
+    // If we get here the link is not found, add it
+    if(addSixtopLink(srcID, destID, seqNum) == FALSE) {
+        whisper_log("Received sixtop packet from neighbor link, could not store it.\n");
+    }
+}
+
+bool isMatchingSixtopLink(uint8_t link_index, const uint8_t* srcID, const uint8_t* destID) {
+    if (srcID[0] != whisper_vars.neighbors.sixtop[link_index].srcId[0] ||
+        srcID[1] != whisper_vars.neighbors.sixtop[link_index].srcId[1] ||
+        destID[0] != whisper_vars.neighbors.sixtop[link_index].destId[0] ||
+        destID[1] != whisper_vars.neighbors.sixtop[link_index].destId[1])
+        return FALSE;
+
+    return TRUE;
+}
+
+bool addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum) {
+    for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
+        if(whisper_vars.neighbors.sixtop[i].active == FALSE) {
+            whisper_vars.neighbors.sixtop[i].srcId[0] = srcID[0];
+            whisper_vars.neighbors.sixtop[i].srcId[1] = srcID[1];
+            whisper_vars.neighbors.sixtop[i].destId[0] = destID[0];
+            whisper_vars.neighbors.sixtop[i].destId[1] = destID[1];
+            whisper_vars.neighbors.sixtop[i].seqNum = seqNum;
+            whisper_vars.neighbors.sixtop[i].active = TRUE;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+bool getSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t* seqNum) {
+    for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
+        if(isMatchingSixtopLink(i, srcID, destID) && whisper_vars.neighbors.sixtop[i].active) {
+            *seqNum = whisper_vars.neighbors.sixtop[i].seqNum;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+void updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum) {
+    for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
+        if(isMatchingSixtopLink(i, srcID, destID)) {
+            whisper_vars.neighbors.sixtop->seqNum = seqNum;
+            return;
+        }
+    }
 }
 
 // ============================================================================================
