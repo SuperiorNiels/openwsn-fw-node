@@ -162,6 +162,19 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 {
 	owerror_t outcome = E_FAIL;
 
+    // Don's do anything new when not, idle
+    if(whisper_vars.state != WHISPER_STATE_IDLE) {
+        // reset packet payload
+        msg->payload                     = &(msg->packet[127]);
+        msg->length                      = 0;
+        packetfunctions_reserveHeaderSize(msg,1);
+        msg->payload[0] = 0x01;
+        coap_header->Code                = COAP_CODE_RESP_CHANGED;
+        return E_SUCCESS;
+    } else {
+        whisper_log("Whisper node not idle, command aborted.\n");
+    }
+
 	switch (coap_header->Code) {
 		case COAP_CODE_REQ_GET:
 		    whisper_log("Received CoAP GET.\n");
@@ -182,24 +195,19 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
         case COAP_CODE_REQ_PUT:
             whisper_log("Received CoAP PUT.\n");
 
-            // Don's execute command if state is not idle
-            if(whisper_vars.state == WHISPER_STATE_IDLE) {
-                if(msg->length <= 30) {
-                    memcpy(whisper_vars.payloadBuffer, msg->payload, msg->length);
-                    whisper_vars.state = WHISPER_STATE_WAIT_COAP;
-                    // Start timer to clean up (in any event)
-                    opentimers_scheduleIn(
-                            whisper_vars.oneshotTimer,
-                            (uint32_t) 10000, // wait 10 seconds
-                            TIME_MS,
-                            TIMER_ONESHOT,
-                            whisperClearStateCb
-                    );
-                } else {
-                    whisper_log("Message payload to long.\n");
-                }
+            if(msg->length <= 30) {
+                memcpy(whisper_vars.payloadBuffer, msg->payload, msg->length);
+                whisper_vars.state = WHISPER_STATE_WAIT_COAP;
+                // Start timer to clean up (in any event)
+                opentimers_scheduleIn(
+                        whisper_vars.oneshotTimer,
+                        (uint32_t) 10000, // wait 10 seconds
+                        TIME_MS,
+                        TIMER_ONESHOT,
+                        whisperClearStateCb
+                );
             } else {
-                whisper_log("Whisper node not idle, abort.\n");
+                whisper_log("Message payload to long.\n");
             }
 
             // reset packet payload
@@ -303,6 +311,11 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
             switch(code) {
                 case IANA_6TOP_RC_SUCCESS:
                     whisper_log("Whisper 6P command successful.\n");
+                    if(whisper_vars.whisper_sixtop.request_type == IANA_6TOP_CMD_CLEAR) {
+                        uint8_t srcID[2] = {whisper_vars.whisper_sixtop.source.addr_64b[6], whisper_vars.whisper_sixtop.source.addr_64b[7]};
+                        uint8_t destID[2] = {whisper_vars.whisper_sixtop.target.addr_64b[6], whisper_vars.whisper_sixtop.target.addr_64b[7]};
+                        updateSixtopLinkSeqNum(srcID, destID, 0);
+                    }
                     // Notify controller
                     break;
                 case IANA_6TOP_RC_SEQNUM_ERR:
@@ -471,7 +484,7 @@ void whisperExecuteSixtop() {
         uint8_t destID[2] = {whisper_vars.whisper_sixtop.target.addr_64b[6], whisper_vars.whisper_sixtop.target.addr_64b[7]};
 
         uint8_t seqNum;
-        if(getSixtopLinkSeqNum(srcID, destID, &seqNum) == FALSE) {
+        if (getSixtopLinkSeqNum(srcID, destID, &seqNum) == FALSE) {
             whisper_log("No link found in memory, sending 6P command with seqNum 0.\n");
             seqNum = 0;
             addSixtopLink(srcID, destID, 1);
@@ -540,12 +553,17 @@ void whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEn
         seqNum     =  *((uint8_t*)(msg->payload)+ptr) & 0xff;
 
         if(sfid == msf_getsfid()) {
-            // Same sfid, store the seqNum for the link
-            seqNum++;
-            whisper_log("Received seqNum: %d.\n", seqNum);
-            whisper_log("SRC: "); whisper_print_address(&header->src);
-            whisper_log("DEST: "); whisper_print_address(&header->dest);
-            whisperUpdateOrAddSixtopLinkInfo(&header->src, &header->dest, seqNum);
+            if (code != IANA_6TOP_CMD_CLEAR) {
+                // Store the seqNum for the link
+                seqNum++;
+                whisperUpdateOrAddSixtopLinkInfo(&header->src, &header->dest, seqNum);
+                whisperUpdateOrAddSixtopLinkInfo(&header->dest, &header->src, seqNum);
+            } else {
+                // Clear command
+                whisper_log("Received clear request.\n");
+                whisperUpdateOrAddSixtopLinkInfo(&header->src, &header->dest, 0);
+                whisperUpdateOrAddSixtopLinkInfo(&header->dest, &header->src, 0);
+            }
         }
     }
 }
@@ -559,6 +577,7 @@ void whisperUpdateOrAddSixtopLinkInfo(open_addr_t* src, open_addr_t* dest, uint8
     for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
         if(isMatchingSixtopLink(i, srcID, destID)) {
             // update seqNum
+            whisper_log("Updating link: %d -> %d, seqNum: %d.\n", srcID[1], destID[1], seqNum);
             whisper_vars.neighbors.sixtop->seqNum = seqNum;
             whisper_vars.neighbors.sixtop->active = TRUE;
             return;
@@ -610,6 +629,21 @@ void updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t
     for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
         if(isMatchingSixtopLink(i, srcID, destID)) {
             whisper_vars.neighbors.sixtop->seqNum = seqNum;
+            return;
+        }
+    }
+}
+
+void removeAllSixtopLinksNeighbor(open_addr_t* neighbor) {
+    uint8_t ID[2] = {neighbor->addr_64b[6], neighbor->addr_64b[7]};
+    for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
+        if ((ID[0] == whisper_vars.neighbors.sixtop[i].srcId[0] &&
+            ID[1] == whisper_vars.neighbors.sixtop[i].srcId[1] ) ||
+            (ID[0] == whisper_vars.neighbors.sixtop[i].destId[0] &&
+            ID[1] == whisper_vars.neighbors.sixtop[i].destId[1]))
+        {
+            whisper_vars.neighbors.sixtop[i].seqNum = 0;
+            whisper_vars.neighbors.sixtop[i].active = FALSE;
             return;
         }
     }

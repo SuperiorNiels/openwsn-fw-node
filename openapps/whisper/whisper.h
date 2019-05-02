@@ -110,6 +110,7 @@ bool            isMatchingSixtopLink(uint8_t link_index, const uint8_t* srcID, c
 bool            addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum);
 bool            getSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t* seqNum);
 void            updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum);
+void            removeAllSixtopLinksNeighbor(open_addr_t* neighbor);
 
 // Logging (should be removed for openmote build, no printf..)
 void            whisper_log(char* msg, ...);

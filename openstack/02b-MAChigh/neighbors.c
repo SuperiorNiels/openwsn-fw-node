@@ -7,6 +7,7 @@
 #include "IEEE802154E.h"
 #include "openrandom.h"
 #include "msf.h"
+#include "whisper.h"
 
 //=========================== variables =======================================
 
@@ -779,6 +780,8 @@ void removeNeighbor(uint8_t neighborIndex) {
     uint16_t moteId = 256 * neighbors_vars.neighbors[neighborIndex].addr_64b.addr_64b[6]
                       + neighbors_vars.neighbors[neighborIndex].addr_64b.addr_64b[7];
     schedule_removeActiveSlot(msf_hashFunction_getSlotoffset(moteId), &neighbors_vars.neighbors[neighborIndex].addr_64b);
+
+    removeAllSixtopLinksNeighbor(&neighbors_vars.neighbors[neighborIndex].addr_64b);
 
     neighbors_vars.neighbors[neighborIndex].used                      = FALSE;
     neighbors_vars.neighbors[neighborIndex].parentPreference          = 0;
