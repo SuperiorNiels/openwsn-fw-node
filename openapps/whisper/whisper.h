@@ -15,10 +15,11 @@
 
 #define SIXTOP_MAX_LINK_SNIFFING 20 // number of links to keep track of
 
-#define WHISPER_STATE_IDLE      0x00
-#define WHISPER_STATE_SIXTOP    0x01
-#define WHISPER_STATE_DIO       0x02
-#define WHISPER_STATE_WAIT_COAP 0x03
+#define WHISPER_STATE_IDLE          0x00
+#define WHISPER_STATE_SIXTOP        0x01
+#define WHISPER_STATE_DIO           0x02
+#define WHISPER_STATE_WAIT_COAP     0x03
+#define WHISPER_STATE_SEND_RESULT   0x04
 
 //=========================== typedef =========================================
 
@@ -68,6 +69,7 @@ typedef struct {
     uint16_t             timerPeriod;
     uint8_t 			 state;
     open_addr_t          my_addr;
+    open_addr_t          controller_addr;
     uint8_t              payloadBuffer[30]; // 30 bytes should be enough
     // Command variables
     whisper_ack_sniffing whisper_ack;
@@ -111,6 +113,8 @@ bool            addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8
 bool            getSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t* seqNum);
 void            updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum);
 void            removeAllSixtopLinksNeighbor(open_addr_t* neighbor);
+
+void            sendCoapResponseToController(uint8_t *payload, uint8_t length);
 
 // Logging (should be removed for openmote build, no printf..)
 void            whisper_log(char* msg, ...);
