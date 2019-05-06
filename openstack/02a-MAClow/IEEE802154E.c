@@ -2774,7 +2774,6 @@ void notif_sendDone(OpenQueueEntry_t* packetSent, owerror_t error) {
 
 void notif_receive(OpenQueueEntry_t* packetReceived) {
     if(packetReceived->is6pFake) {
-        whisper_log("Processing IEs\n");
         whisperSixtopProcessIE(packetReceived); // Check the response
         // Always drop the packet here, the packet is not meant to be processed by this node (normally)
         openqueue_freePacketBuffer(packetReceived);

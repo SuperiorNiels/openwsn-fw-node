@@ -13,7 +13,7 @@
 
 //=========================== define ==========================================
 
-#define SIXTOP_MAX_LINK_SNIFFING 20 // number of links to keep track of
+#define SIXTOP_MAX_LINK_SNIFFING 30 // number of links to keep track of
 
 #define WHISPER_STATE_IDLE          0x00
 #define WHISPER_STATE_SIXTOP        0x01

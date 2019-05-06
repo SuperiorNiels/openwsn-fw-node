@@ -843,3 +843,17 @@ void neighbors_updateAutonomousCells() {
         }
     }
 }
+
+uint8_t getNeighborsList(uint8_t* list) {
+    uint8_t i, count;
+
+    count = 0;
+    for(i = 0; i < MAXNUMNEIGHBORS; i++) {
+        if(neighbors_vars.neighbors[i].used && neighbors_vars.neighbors[i].stableNeighbor) {
+            list[count] = neighbors_vars.neighbors[i].addr_64b.addr_64b[6];
+            list[count + 1] = neighbors_vars.neighbors[i].addr_64b.addr_64b[7];
+            count += 2;
+        }
+    }
+    return count;
+}

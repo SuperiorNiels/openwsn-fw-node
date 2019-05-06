@@ -116,7 +116,7 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
                     opentimers_cancel(whisper_vars.oneshotTimer);
                     whisper_vars.state = WHISPER_STATE_IDLE;
                     for (uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
-                        if (whisper_vars.neighbors.sixtop->active == TRUE) {
+                        if (whisper_vars.neighbors.sixtop[i].active == TRUE) {
                             whisper_log("Link %d -> %d, seqNum: %d\n",
                                         whisper_vars.neighbors.sixtop[i].srcId[1],
                                         whisper_vars.neighbors.sixtop[i].destId[1],
@@ -124,18 +124,26 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
                         }
                     }
                     break;
+                case 0x04:
+                    whisper_log("Whisper get neighbours command.\n");
+                    // Cancel timer
+                    opentimers_cancel(whisper_vars.oneshotTimer);
+                    whisper_vars.state = WHISPER_STATE_IDLE;
+                    uint8_t payload[60]; // 2 bytes per possible neigbour
+                    payload[0] = 0x04; // indicate response to get neighbours command
+                    payload[1] = idmanager_getMyID(ADDR_64B)->addr_64b[6];
+                    payload[2] = idmanager_getMyID(ADDR_64B)->addr_64b[7];
+                    uint8_t length = getNeighborsList(&payload[3]);
+                    sendCoapResponseToController(payload, length + 3);
+                    break;
                 default:
-                    whisper_log("Command not found: %d.\n", whisper_vars.payloadBuffer[1]);
                     break;
             }
         } else if (whisper_vars.state == WHISPER_STATE_SEND_RESULT) {
             whisper_vars.state = WHISPER_STATE_IDLE;
-        } else {
-            whisper_log("Not the correct state to perform whisper command.\n");
         }
     }
 
-    whisper_log("Removing packet.\n");
     openqueue_freePacketBuffer(msg);
 }
 
@@ -152,10 +160,10 @@ void whisperClearStateCb(opentimers_id_t id) {
             whisper_log("Clearing whisper dio settings\n");
             if(whisper_vars.whisper_ack.acceptACKs == FALSE) {
                 // if false, the ACK is received, and the dio message is received correctly
-                uint8_t result[3] = {0x57, 0x01, 0x00};
+                uint8_t result[3] = {0x01, 0x00};
                 sendCoapResponseToController(result, 3);
             } else {
-                uint8_t result[3] = {0x57, 0x01, 0x01};
+                uint8_t result[3] = {0x01, 0x01};
                 sendCoapResponseToController(result, 3);
             }
             break;
@@ -190,36 +198,16 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 {
 	owerror_t outcome;
 
-    // Don's do anything new when not, idle
+    // Dont's do anything new when not, idle
     if(whisper_vars.state != WHISPER_STATE_IDLE) {
         // reset packet payload
         msg->payload                     = &(msg->packet[127]);
         msg->length                      = 0;
-        packetfunctions_reserveHeaderSize(msg,1);
-        msg->payload[0] = 0x01;
         coap_header->Code                = COAP_CODE_RESP_CHANGED;
-        return E_SUCCESS;
-    } else {
-        whisper_log("Whisper node not idle, command aborted.\n");
+        return E_FAIL;
     }
 
 	switch (coap_header->Code) {
-		case COAP_CODE_REQ_GET:
-		    whisper_log("Received CoAP GET.\n");
-			// To reuse the packetBuffer we need to reset the message payload
-			msg->payload = &(msg->packet[127]);
-			msg->length = 0;
-
-			// Create data and
-			const int8_t respose_payload[] = "Whisper node Loaded.";
-			packetfunctions_reserveHeaderSize(msg,sizeof(respose_payload)-1);
-			memcpy(&msg->payload[0],&respose_payload,sizeof(respose_payload)-1);
-
-			// Set COAP header code
-			coap_header->Code = COAP_CODE_RESP_CONTENT;
-			outcome = E_SUCCESS;
-			break;
-
         case COAP_CODE_REQ_PUT:
             whisper_log("Received CoAP PUT.\n");
 
@@ -432,8 +420,8 @@ bool whisperSixtopParse(const uint8_t* command) {
     // Stop parsing early when command is list or clear
     switch (whisper_vars.whisper_sixtop.request_type) {
         case IANA_6TOP_CMD_LIST:
-            whisper_vars.whisper_sixtop.listMaxCells = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
-            whisper_vars.whisper_sixtop.listOffset = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
+            whisper_vars.whisper_sixtop.listMaxCells = (uint16_t) (command[8] << 8) | (uint16_t ) command[9];
+            whisper_vars.whisper_sixtop.listOffset = (uint16_t) (command[10] << 8) | (uint16_t ) command[11];
             // No cell creation needed
             whisper_vars.whisper_sixtop.command_parsed = TRUE;
             return TRUE;
@@ -444,11 +432,11 @@ bool whisperSixtopParse(const uint8_t* command) {
             break;
     }
 
-    switch(command[9]) {
+    switch(command[8]) {
         case 0x01:
             // Cell is defined in the command
-            slotOffset = (uint16_t) (command[10] << 8) | (uint16_t ) command[11];
-            channel = (uint16_t) (command[12] << 8) | (uint16_t ) command[13];
+            slotOffset = (uint16_t) (command[9] << 8) | (uint16_t ) command[10];
+            channel = (uint16_t) (command[11] << 8) | (uint16_t ) command[12];
             whisper_vars.whisper_sixtop.cell.slotoffset       = slotOffset;
             whisper_vars.whisper_sixtop.cell.channeloffset    = channel;
             whisper_vars.whisper_sixtop.cell.isUsed           = TRUE;
@@ -506,6 +494,7 @@ void whisperExecuteSixtop() {
             seqNum = 0;
             addSixtopLink(srcID, destID, 1);
         } else {
+            whisper_log("Sending 6P command with seqNum: %d\n", seqNum);
             updateSixtopLinkSeqNum(srcID, destID, seqNum + 1);
         }
 
@@ -540,9 +529,8 @@ void whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEn
         (header->ieListPresent == TRUE && header->frameType == IEEE154_TYPE_DATA))
     {
         uint8_t ptr = 0;
-        uint8_t temp_8b, subtypeid, code, sfid, seqNum;
+        uint8_t temp_8b, subtypeid, code, sfid, seqNum, version,type;
         uint16_t temp_16b;
-        whisper_log("Received 6p packet from transaction between other nodes: processing for information.\n");
 
         // First check if the IE header is valid
         temp_8b     = *((uint8_t*)(msg->payload)+ptr);
@@ -555,8 +543,16 @@ void whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEn
 
         // check 6p subtype Id
         subtypeid = *((uint8_t*)(msg->payload)+ptr);
-        ptr += 2; // this way we skip the 6p version field
+        ptr += 1;
         if (subtypeid != IANA_6TOP_SUBIE_ID) return;
+
+        // check 6p version
+        temp_8b = *((uint8_t*)(msg->payload)+ptr);
+        ptr += 1;
+        // 6p doesn't define type 3
+        if (temp_8b>>IANA_6TOP_TYPE_SHIFT == 3) return;
+        version    = temp_8b &  IANA_6TOP_VESION_MASK;
+        type       = temp_8b >> IANA_6TOP_TYPE_SHIFT;
 
         // get 6p code
         code = *((uint8_t*)(msg->payload)+ptr);
@@ -569,7 +565,7 @@ void whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEn
         // get 6p seqNum
         seqNum =  *((uint8_t*)(msg->payload)+ptr) & 0xff;
 
-        if(sfid == msf_getsfid()) {
+        if(type == SIXTOP_CELL_REQUEST && sfid == msf_getsfid()) {
             if (code != IANA_6TOP_CMD_CLEAR) {
                 // Store the seqNum for the link
                 seqNum++;
@@ -608,13 +604,13 @@ void whisperUpdateOrAddSixtopLinkInfo(open_addr_t* src, open_addr_t* dest, uint8
 }
 
 bool isMatchingSixtopLink(uint8_t link_index, const uint8_t* srcID, const uint8_t* destID) {
-    if (srcID[0] != whisper_vars.neighbors.sixtop[link_index].srcId[0] ||
-        srcID[1] != whisper_vars.neighbors.sixtop[link_index].srcId[1] ||
-        destID[0] != whisper_vars.neighbors.sixtop[link_index].destId[0] ||
-        destID[1] != whisper_vars.neighbors.sixtop[link_index].destId[1])
-        return FALSE;
+    if ((srcID[0] == whisper_vars.neighbors.sixtop[link_index].srcId[0] &&
+         srcID[1] == whisper_vars.neighbors.sixtop[link_index].srcId[1] ) &&
+        (destID[0] == whisper_vars.neighbors.sixtop[link_index].destId[0] &&
+         destID[1] == whisper_vars.neighbors.sixtop[link_index].destId[1]))
+        return TRUE;
 
-    return TRUE;
+    return FALSE;
 }
 
 bool addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum) {
@@ -626,6 +622,7 @@ bool addSixtopLink(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum) 
             whisper_vars.neighbors.sixtop[i].destId[1] = destID[1];
             whisper_vars.neighbors.sixtop[i].seqNum = seqNum;
             whisper_vars.neighbors.sixtop[i].active = TRUE;
+            whisper_log("Adding link: %d -> %d, seqNum: %d.\n", srcID[1], destID[1], seqNum);
             return TRUE;
         }
     }
@@ -645,7 +642,8 @@ bool getSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t* s
 void updateSixtopLinkSeqNum(const uint8_t* srcID, const uint8_t* destID, uint8_t seqNum) {
     for(uint8_t i = 0; i < SIXTOP_MAX_LINK_SNIFFING; i++) {
         if(isMatchingSixtopLink(i, srcID, destID)) {
-            whisper_vars.neighbors.sixtop->seqNum = seqNum;
+            whisper_log("Updating link: %d -> %d, seqNum: %d.\n", srcID[1], destID[1], seqNum);
+            whisper_vars.neighbors.sixtop[i].seqNum = seqNum;
             return;
         }
     }
