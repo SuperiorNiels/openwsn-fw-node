@@ -591,8 +591,8 @@ void whisperUpdateOrAddSixtopLinkInfo(open_addr_t* src, open_addr_t* dest, uint8
         if(isMatchingSixtopLink(i, srcID, destID)) {
             // update seqNum
             whisper_log("Updating link: %d -> %d, seqNum: %d.\n", srcID[1], destID[1], seqNum);
-            whisper_vars.neighbors.sixtop->seqNum = seqNum;
-            whisper_vars.neighbors.sixtop->active = TRUE;
+            whisper_vars.neighbors.sixtop[i].seqNum = seqNum;
+            whisper_vars.neighbors.sixtop[i].active = TRUE;
             return;
         }
     }
