@@ -26,6 +26,13 @@
 //=========================== variables =======================================
 
 typedef struct {
+    dagrank_t       neighbour_rank[MAXNUMNEIGHBORS]; // add this to the neighbour info (neighbour.h)
+    uint16_t        period; // period to which the dios should be sent
+    opentimers_id_t timer;
+    bool            active; // when true no normal dios will be sent
+} whisper_propagating_dio;
+
+typedef struct {
     uint8_t srcId[2];
     uint8_t destId[2];
     uint8_t seqNum;
@@ -85,6 +92,12 @@ void            whisper_setState(uint8_t i);
 uint8_t         whisper_getState(void);
 void            whisper_task_remote(uint8_t* buf, uint8_t bufLen);
 void            whisperClearStateCb(opentimers_id_t id); // callback to clean up commands
+
+// Whisper propagating dio
+bool            getSendNormalDio();
+void            setPeriod(uint16_t period);
+void            togglePropagatingDios();
+void            setRankForNeighbour(dagrank_t rank);
 
 // Whipser Fake dio command
 open_addr_t*    getWhisperDIOtarget();
