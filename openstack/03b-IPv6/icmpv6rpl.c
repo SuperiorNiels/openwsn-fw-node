@@ -921,6 +921,10 @@ uint8_t send_WhisperDIO() {
     }
 }
 
+void stopSendDios() {
+    icmpv6rpl_vars.sendNormalDios = FALSE;
+};
+
 //===== DAO-related
 
 /**
