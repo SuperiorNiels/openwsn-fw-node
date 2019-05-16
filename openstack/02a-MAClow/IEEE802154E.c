@@ -1875,7 +1875,7 @@ port_INLINE void activity_ri5(PORT_TIMER_WIDTH capturedTime) {
         if (isValidRxFrame(&ieee802514_header)==FALSE) {
             if(whisperSixtopPacketAccept(&ieee802514_header)) {
                 // Packet is part of whisper 6p transaction
-                whisper_log("Invalid RX frame (not for me): whisper 6P response received.\n");
+                whisper_log("Whisper 6P transaction response received.\n");
                 ieee154e_vars.dataReceived->is6pFake = TRUE;
             } else {
                 // Packet could be 6P transaction between other nodes ==> process for information

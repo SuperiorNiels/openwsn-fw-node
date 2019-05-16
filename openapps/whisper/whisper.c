@@ -1,5 +1,5 @@
 /**
-\brief Whisper module, runs on the (DAG)root only and is responsible for sending fake dio's
+\brief Whisper module
 */
 
 #include <stdarg.h>
@@ -158,12 +158,9 @@ void whisperClearStateCb(opentimers_id_t id) {
             break;
         case WHISPER_STATE_DIO:
             whisper_log("Clearing whisper dio settings\n");
-            if(whisper_vars.whisper_ack.acceptACKs == FALSE) {
-                // if false, the ACK is received, and the dio message is received correctly
-                uint8_t result[3] = {0x01, 0x00};
-                sendCoapResponseToController(result, 3);
-            } else {
-                uint8_t result[3] = {0x01, 0x01};
+            if(whisper_vars.whisper_ack.acceptACKs ) {
+                // No ACK received
+                uint8_t result[3] = {WHISPER_COMMAND_DIO, E_FAIL};
                 sendCoapResponseToController(result, 3);
             }
             break;
@@ -179,6 +176,7 @@ void whisperClearStateCb(opentimers_id_t id) {
     whisper_vars.state = WHISPER_STATE_IDLE;
     whisper_vars.whisper_ack.acceptACKs = FALSE;
     whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+    openqueue_freeWhisperPackets(); // free all packets created by whisper 
 }
 
 void whisper_timer_cb(opentimers_id_t id) {
@@ -269,6 +267,13 @@ bool whisperACKreceive(ieee802154_header_iht* ieee802154_header) {
             packetfunctions_sameAddress(&ieee802154_header->dest, &whisper_vars.whisper_ack.ACKdest)) {
             whisper_log("ACK received.\n");
             whisper_vars.whisper_ack.acceptACKs = FALSE;
+
+            if(whisper_vars.state == WHISPER_STATE_DIO) {
+                uint8_t result[2] = {WHISPER_COMMAND_DIO, E_SUCCESS};
+                sendCoapResponseToController(result, 2);
+                whisper_vars.state = WHISPER_STATE_IDLE;
+            }
+
             return TRUE;
         }
     }
@@ -313,14 +318,20 @@ void whisperDioCommand(const uint8_t* command) {
 
 // ---------------------- Whisper Sixtop --------------------------
 
-void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
+void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t ptr, uint8_t length) {
     if(whisper_vars.state != WHISPER_STATE_SIXTOP) {
         whisper_log("Wrong state, abort.\n");
         return;
     }
 
+    uint8_t responeLength;
+    uint8_t pktLen = length;
+    open_addr_t addr = pkt->l2_nextORpreviousHop;
+    uint8_t result[2];
+
+    result[0] = WHISPER_COMMAND_SIXTOP;
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
-        if (packetfunctions_sameAddress(addr, &whisper_vars.whisper_sixtop.target)) {
+        if (packetfunctions_sameAddress(&addr, &whisper_vars.whisper_sixtop.target)) {
 
             // Cancel the timer
             opentimers_cancel(whisper_vars.oneshotTimer);
@@ -333,13 +344,37 @@ void whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code) {
                         uint8_t destID[2] = {whisper_vars.whisper_sixtop.target.addr_64b[6], whisper_vars.whisper_sixtop.target.addr_64b[7]};
                         updateSixtopLinkSeqNum(srcID, destID, 0);
                     }
-                    // Notify controller
+                    result[1] = E_SUCCESS;
+                    sendCoapResponseToController(result, 2);
+                    break;
+                case IANA_6TOP_RC_EOL: // FIXME: for now only process the cells when the response is EOL, this means only the cells in this packet will be sent to the controller
+                    whisper_log("Whisper 6P List response received.\n");
+
+                    uint8_t to_controller[CELLLIST_MAX_LEN * sizeof(uint8_t) * 2]; // 2 * 16b per cell
+                    memset(to_controller, 0, CELLLIST_MAX_LEN * sizeof(uint8_t) * 2);
+                    
+                    responeLength = 0;
+                    to_controller[responeLength] = WHISPER_COMMAND_SIXTOP;
+                    responeLength++;
+
+                    while(pktLen>0) {
+                        to_controller[responeLength]        =  *((uint8_t*)(pkt->payload)+ptr);
+                        to_controller[responeLength + 1]    = (*((uint8_t*)(pkt->payload)+ptr+1))<<8;
+                        to_controller[responeLength + 2]    =  *((uint8_t*)(pkt->payload)+ptr+2);
+                        to_controller[responeLength + 3]    = (*((uint8_t*)(pkt->payload)+ptr+3))<<8;
+                        ptr    += 4;
+                        pktLen -= 4;
+                        responeLength += 4;
+                    }
+
+                    sendCoapResponseToController(to_controller, responeLength);
                     break;
                 case IANA_6TOP_RC_SEQNUM_ERR:
                     whisper_log("Whisper 6P command wrong seqNum.\n");
                 default:
                     whisper_log("Whisper 6P failed.\n");
-                    // Notify controller
+                    result[1] = E_FAIL;
+                    sendCoapResponseToController(result, 2);                    
                     break;
             }
 

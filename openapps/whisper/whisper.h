@@ -13,7 +13,7 @@
 
 //=========================== define ==========================================
 
-#define SIXTOP_MAX_LINK_SNIFFING 30 // number of links to keep track of
+#define SIXTOP_MAX_LINK_SNIFFING 60 // number of links to keep track of
 
 #define WHISPER_STATE_IDLE          0x00
 #define WHISPER_STATE_SIXTOP        0x01
@@ -104,7 +104,7 @@ void            whisperDioCommand(const uint8_t* command);
 open_addr_t*    getWhisperSixtopSource();
 bool            whisperSixtopParse(const uint8_t* command);
 void            whisperExecuteSixtop();
-void            whisperSixtopResonseReceive(open_addr_t* addr, uint8_t code);
+void            whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t ptr, uint8_t length);
 void            whisperSixtopProcessIE(OpenQueueEntry_t* pkt);
 
 bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);

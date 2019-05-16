@@ -1107,7 +1107,7 @@ port_INLINE bool sixtop_processIEs(OpenQueueEntry_t* pkt, uint16_t * lenIE) {
 
     if(pkt->is6pFake == TRUE) {
         // notify whisper that a response has been received
-        whisperSixtopResonseReceive(&pkt->l2_nextORpreviousHop, code);
+        whisperSixtopResonseReceive(pkt, code, ptr, len-headerlen);
     } else {
         // give six2six to process
         sixtop_six2six_notifyReceive(version,type,code,sfid,seqNum,ptr,len-headerlen,pkt);
