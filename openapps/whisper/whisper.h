@@ -21,6 +21,13 @@
 #define WHISPER_STATE_WAIT_COAP     0x03
 #define WHISPER_STATE_SEND_RESULT   0x04
 
+#define WHISPER_COMMAND_DIO             0x01
+#define WHISPER_COMMAND_SIXTOP          0x02
+#define WHISPER_COMMAND_LINK_INFO       0x03
+#define WHISPER_COMMAND_NEIGHBOURS      0x04
+#define WHISPER_COMMNAD_TOGGLE_DIO      0x05
+#define WHISPER_COMMNAD_SET_RANKTOSEND  0x06
+
 //=========================== typedef =========================================
 
 //=========================== variables =======================================

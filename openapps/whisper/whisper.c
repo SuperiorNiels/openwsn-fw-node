@@ -101,16 +101,16 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
         if (whisper_vars.state == WHISPER_STATE_WAIT_COAP) {
             // Coap PUT received and coap message is correctly handled
             switch (whisper_vars.payloadBuffer[1]) {
-                case 0x01:
+                case WHISPER_COMMAND_DIO:
                     whisper_log("Whisper fake dio command (remote)\n");
                     whisperDioCommand(whisper_vars.payloadBuffer);
                     break;
-                case 0x02:
+                case WHISPER_COMMAND_SIXTOP:
                     whisper_log("Whisper 6P command (remote).\n");
                     if (whisperSixtopParse(whisper_vars.payloadBuffer)) whisperExecuteSixtop();
                     else whisper_log("Parsing command failed.\n");
                     break;
-                case 0x03:
+                case WHISPER_COMMAND_LINK_INFO:
                     whisper_log("Whisper 6P stored link information: \n");
                     // Cancel the timer
                     opentimers_cancel(whisper_vars.oneshotTimer);
@@ -124,7 +124,7 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
                         }
                     }
                     break;
-                case 0x04:
+                case WHISPER_COMMAND_NEIGHBOURS:
                     whisper_log("Whisper get neighbours command.\n");
                     // Cancel timer
                     opentimers_cancel(whisper_vars.oneshotTimer);

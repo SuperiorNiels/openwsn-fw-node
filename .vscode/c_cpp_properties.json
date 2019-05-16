@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/inc/**",
+                "${workspaceFolder}/drivers/**",
+                "${workspaceFolder}/bsp/boards/*",
+                "${workspaceFolder}/bsp/boards/python/*",
+                "${workspaceFolder}/kernel/**",
+                "${workspaceFolder}/openapps/**",
+                "${workspaceFolder}/openstack/**",
+                "${workspaceFolder}/projects**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
