@@ -2773,12 +2773,6 @@ void notif_sendDone(OpenQueueEntry_t* packetSent, owerror_t error) {
 }
 
 void notif_receive(OpenQueueEntry_t* packetReceived) {
-    if(packetReceived->is6pFake) {
-        whisperSixtopProcessIE(packetReceived); // Check the response
-        // Always drop the packet here, the packet is not meant to be processed by this node (normally)
-        openqueue_freePacketBuffer(packetReceived);
-        return; // packet is a response to whisper 6p command
-    }
     // record the current ASN
     memcpy(&packetReceived->l2_asn, &ieee154e_vars.asn, sizeof(asn_t));
     // indicate reception to the schedule, to keep statistics
@@ -2787,7 +2781,12 @@ void notif_receive(OpenQueueEntry_t* packetReceived) {
     // COMPONENT_IEEE802154E_TO_SIXTOP so sixtop can knows it's for it
     packetReceived->owner          = COMPONENT_IEEE802154E_TO_SIXTOP;
     // post RES's Receive task
-    scheduler_push_task(task_sixtopNotifReceive,TASKPRIO_SIXTOP_NOTIF_RX);
+    if(packetReceived->is6pFake) {
+        // Packet part of fake 6p transaction, let whisper process it, we don't sent it further up the stack
+        scheduler_push_task(whisperSixtopProcessIE,TASKPRIO_SIXTOP_NOTIF_RX);
+    } else {
+        scheduler_push_task(task_sixtopNotifReceive,TASKPRIO_SIXTOP_NOTIF_RX);
+    }
     // wake up the scheduler
     SCHEDULER_WAKEUP();
 }

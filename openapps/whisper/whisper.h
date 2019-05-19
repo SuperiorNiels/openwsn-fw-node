@@ -94,18 +94,18 @@ void            whisper_task_remote(uint8_t* buf, uint8_t bufLen);
 void            whisperClearStateCb(opentimers_id_t id); // callback to clean up commands
 
 // Whipser Fake dio command
-open_addr_t*    getWhisperDIOtarget();
-open_addr_t*    getWhisperDIOparent();
-open_addr_t*    getWhisperDIOnextHop();
-dagrank_t       getWhisperDIOrank();
+open_addr_t*    getWhisperDIOtarget(void);
+open_addr_t*    getWhisperDIOparent(void);
+open_addr_t*    getWhisperDIOnextHop(void);
+dagrank_t       getWhisperDIOrank(void);
 void            whisperDioCommand(const uint8_t* command);
 
 // Whisper sixtop
-open_addr_t*    getWhisperSixtopSource();
+open_addr_t*    getWhisperSixtopSource(void);
 bool            whisperSixtopParse(const uint8_t* command);
-void            whisperExecuteSixtop();
+void            whisperExecuteSixtop(void);
 void            whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t ptr, uint8_t length);
-void            whisperSixtopProcessIE(OpenQueueEntry_t* pkt);
+void            whisperSixtopProcessIE(void);
 
 bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);
 void            whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEntry_t* msg);

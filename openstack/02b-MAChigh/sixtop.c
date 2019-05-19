@@ -471,6 +471,13 @@ void task_sixtopNotifSendDone(void) {
         case COMPONENT_SIXTOP_RES:
             sixtop_six2six_sendDone(msg,msg->l2_sendDoneError);
             break;
+        case COMPONENT_WHISPER:
+            if(msg->is6pFake) {
+                // TODO: check error code E_FAIL can mean no ACK was received
+                whisper_log("6P command successfully sent.\n");
+                openqueue_freePacketBuffer(msg);
+                break;
+            }
         default:
             // send the rest up the stack
             iphc_sendDone(msg,msg->l2_sendDoneError);
@@ -1859,7 +1866,7 @@ owerror_t sixtop_request_Whisper(
     }
 
     // take ownership
-    pkt->creator = COMPONENT_SIXTOP_RES;
+    pkt->creator = COMPONENT_WHISPER;
     pkt->owner = COMPONENT_SIXTOP_RES;
 
     pkt->is6pFake = TRUE;

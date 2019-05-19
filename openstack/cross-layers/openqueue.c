@@ -482,7 +482,7 @@ OpenQueueEntry_t*  openqueue_macGet6PandJoinPacket(open_addr_t* toNeighbor){
            ) &&
            (
                openqueue_vars.queue[i].creator == COMPONENT_SIXTOP_RES ||
-               openqueue_vars.queue[i].creator == COMPONENT_CJOIN
+               openqueue_vars.queue[i].creator == COMPONENT_CJOIN || (openqueue_vars.queue[i].creator == COMPONENT_WHISPER && openqueue_vars.queue[i].is6pFake)
            )
        ){
             ENABLE_INTERRUPTS();

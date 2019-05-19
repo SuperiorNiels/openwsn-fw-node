@@ -47,7 +47,7 @@ void whisper_timer_cb(opentimers_id_t id);
 /**
 \brief Initialize this module.
 */
-void whisper_init() {
+void whisper_init(void) {
 	whisper_log("Initializing whisper node.\n");
 
 	whisper_vars.state = WHISPER_STATE_IDLE;
@@ -92,7 +92,7 @@ void whisper_setState(uint8_t i) {
 	whisper_vars.state=i;
 }
 
-uint8_t whisper_getState() {
+uint8_t whisper_getState(void) {
 	return whisper_vars.state;
 }
 
@@ -144,6 +144,7 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
         }
     }
 
+    whisper_log("Removing sent CoAP packet.\n");
     openqueue_freePacketBuffer(msg);
 }
 
@@ -160,15 +161,14 @@ void whisperClearStateCb(opentimers_id_t id) {
             whisper_log("Clearing whisper dio settings\n");
             if(whisper_vars.whisper_ack.acceptACKs ) {
                 // No ACK received
-                uint8_t result[3] = {WHISPER_COMMAND_DIO, E_FAIL};
-                sendCoapResponseToController(result, 3);
+                uint8_t result[2] = {WHISPER_COMMAND_DIO, E_FAIL};
+                sendCoapResponseToController(result, 2);
             }
             break;
         case WHISPER_STATE_WAIT_COAP:
             whisper_log("Waiting for CoAP, command aborted.\n");
             break;
         default:
-            whisper_log("Unkown state.\n");
             break;
     }
 
@@ -176,7 +176,7 @@ void whisperClearStateCb(opentimers_id_t id) {
     whisper_vars.state = WHISPER_STATE_IDLE;
     whisper_vars.whisper_ack.acceptACKs = FALSE;
     whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
-    openqueue_freeWhisperPackets(); // free all packets created by whisper 
+    openqueue_freeWhisperPackets(); // free all packets created by whisper (not response packets)
 }
 
 void whisper_timer_cb(opentimers_id_t id) {
@@ -241,23 +241,23 @@ owerror_t whisper_receive(OpenQueueEntry_t* msg,
 
 // ---------------------- Whisper DIO --------------------------
 
-open_addr_t* getWhisperDIOtarget() {
+open_addr_t* getWhisperDIOtarget(void) {
     return &whisper_vars.whisper_dio.target;
 }
 
-open_addr_t* getWhisperDIOparent() {
+open_addr_t* getWhisperDIOparent(void) {
     return &whisper_vars.whisper_dio.parent;
 }
 
-open_addr_t* getWhisperDIOnextHop() {
+open_addr_t* getWhisperDIOnextHop(void) {
     return &whisper_vars.whisper_dio.nextHop;
 }
 
-dagrank_t getWhisperDIOrank() {
+dagrank_t getWhisperDIOrank(void) {
     return whisper_vars.whisper_dio.rank;
 }
 
-open_addr_t* getWhisperSixtopSource() {
+open_addr_t* getWhisperSixtopSource(void) {
     return &whisper_vars.whisper_sixtop.source;
 }
 
@@ -312,8 +312,6 @@ void whisperDioCommand(const uint8_t* command) {
         packetfunctions_ip128bToMac64b(&whisper_vars.whisper_dio.parent,&temp,&whisper_vars.whisper_ack.ACKdest);
         whisper_vars.whisper_ack.acceptACKs = TRUE;
     }
-
-    // Notify controller when ACK is received
 }
 
 // ---------------------- Whisper Sixtop --------------------------
@@ -333,9 +331,6 @@ void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t pt
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
         if (packetfunctions_sameAddress(&addr, &whisper_vars.whisper_sixtop.target)) {
 
-            // Cancel the timer
-            opentimers_cancel(whisper_vars.oneshotTimer);
-
             switch(code) {
                 case IANA_6TOP_RC_SUCCESS:
                     whisper_log("Whisper 6P command successful.\n");
@@ -350,9 +345,9 @@ void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t pt
                 case IANA_6TOP_RC_EOL: // FIXME: for now only process the cells when the response is EOL, this means only the cells in this packet will be sent to the controller
                     whisper_log("Whisper 6P List response received.\n");
 
-                    uint8_t to_controller[CELLLIST_MAX_LEN * sizeof(uint8_t) * 2]; // 2 * 16b per cell
+                    uint8_t to_controller[CELLLIST_MAX_LEN * sizeof(uint8_t) * 2];
                     memset(to_controller, 0, CELLLIST_MAX_LEN * sizeof(uint8_t) * 2);
-                    
+
                     responeLength = 0;
                     to_controller[responeLength] = WHISPER_COMMAND_SIXTOP;
                     responeLength++;
@@ -373,14 +368,14 @@ void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t pt
                     whisper_log("Whisper 6P command wrong seqNum.\n");
                 default:
                     whisper_log("Whisper 6P failed.\n");
-                    result[1] = E_FAIL;
-                    sendCoapResponseToController(result, 2);                    
+                    result[1] = E_FAIL;      
+                    sendCoapResponseToController(result, 2);           
                     break;
             }
 
+            // Clean up here
             whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
-            whisper_vars.whisper_ack.acceptACKs = FALSE;
-            whisper_vars.state = WHISPER_STATE_IDLE;
+            opentimers_cancel(whisper_vars.oneshotTimer); // cancel the timer
         } else {
             whisper_log("Sixtop response received from wrong address.\n");
         }
@@ -401,9 +396,12 @@ bool whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header) {
     return FALSE;
 }
 
-void whisperSixtopProcessIE(OpenQueueEntry_t* pkt) {
+void whisperSixtopProcessIE(void) {
     uint16_t temp;
-    sixtop_processIEs(pkt, &temp); // Process IE, this function should call whisperSixtopResonseReceive
+    OpenQueueEntry_t* pkt = openqueue_sixtopGetReceivedPacket();
+    sixtop_processIEs(pkt, &temp);
+    // Always drop the packet here, the packet is not meant to be processed by this node (normally)
+    openqueue_freePacketBuffer(pkt); // Process IE, this function should call whisperSixtopResonseReceive
 }
 
 bool whisperSixtopParse(const uint8_t* command) {
@@ -496,7 +494,7 @@ bool whisperSixtopParse(const uint8_t* command) {
     return TRUE; // command parsed successfully
 }
 
-void whisperExecuteSixtop() {
+void whisperExecuteSixtop(void) {
     // The command should be parsed successfully in the whisper_vars
     if(whisper_vars.whisper_sixtop.command_parsed == FALSE) {
         whisper_log("Command not parsed correctly, not executing 6P\n.");
@@ -545,15 +543,15 @@ void whisperExecuteSixtop() {
                 seqNum                                     // Sequence number of 6P message
         );
     } else {
-        whisper_log("Failed to add cell to target. 6P response would not be received.\n");
+        whisper_log("No cell to target. 6P response would not be received.\n");
     }
 
     whisper_vars.whisper_sixtop.command_parsed = FALSE; // require the command to be (re-)parsed
 
     if(request == E_SUCCESS) {
-        whisper_log("Sixtop request sent.\n");
-        whisper_vars.whisper_ack.acceptACKs = TRUE;
         whisper_vars.state = WHISPER_STATE_SIXTOP;
+        whisper_vars.whisper_ack.acceptACKs = TRUE;
+        whisper_log("Sixtop request sent.\n");
     }
     else whisper_log("Sixtop request not sent. Something went wrong.\n");
 }
@@ -709,16 +707,19 @@ void sendCoapResponseToController(uint8_t *payload, uint8_t length) {
         return;
 
     // create a CoAP packet
-    pkt = openqueue_getFreePacketBuffer(COMPONENT_CEXAMPLE);
+    pkt = openqueue_getFreePacketBuffer(COMPONENT_WHISPER);
     if (pkt==NULL) {
         openserial_printError(
-                COMPONENT_CEXAMPLE,
+                COMPONENT_WHISPER,
                 ERR_NO_FREE_PACKET_BUFFER,
                 (errorparameter_t)0,
                 (errorparameter_t)0
         );
         return;
     }
+
+    if(whisper_vars.state == WHISPER_STATE_SEND_RESULT || whisper_vars.state == WHISPER_STATE_WAIT_COAP)
+        return;
 
     // take ownership over packet
     pkt->creator = COMPONENT_WHISPER;
@@ -766,7 +767,7 @@ void sendCoapResponseToController(uint8_t *payload, uint8_t length) {
 // ============================================================================================
 // Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {
-	open_addr_t* my_id = idmanager_getMyID(ADDR_16B);
+	open_addr_t my_id = *idmanager_getMyID(ADDR_16B);
 
 	char state[20];
 	switch(whisper_vars.state) {
@@ -782,7 +783,7 @@ void whisper_log(char* msg, ...) {
             break;
 	}
 
-	printf("[%s] [%d] whisper_node - ", state, my_id->addr_64b[1]);
+	printf("[%s] [%d] whisper_node - ", state, my_id.addr_64b[1]);
 
 	char buf[100];
 	va_list v1;
@@ -814,7 +815,3 @@ void whisper_print_address(open_addr_t* addr) {
 	}
 	printf("\n");
 }
-
-
-
-
