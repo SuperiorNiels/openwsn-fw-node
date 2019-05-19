@@ -144,7 +144,6 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
         }
     }
 
-    whisper_log("Removing sent CoAP packet.\n");
     openqueue_freePacketBuffer(msg);
 }
 
@@ -743,6 +742,9 @@ void sendCoapResponseToController(uint8_t *payload, uint8_t length) {
     // metadata
     pkt->l4_destination_port = 61620; // whisper controller port
     memcpy(&pkt->l3_destinationAdd, &whisper_vars.controller_addr, sizeof(open_addr_t));
+
+    pkt->is6pFake = FALSE;
+    pkt->isDioFake = FALSE;
 
     // send
     uint8_t outcome = opencoap_send(
