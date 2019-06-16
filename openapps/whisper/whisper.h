@@ -14,12 +14,13 @@
 //=========================== define ==========================================
 
 #define SIXTOP_MAX_LINK_SNIFFING 60 // number of links to keep track of
+#define WHISPER_6P_STABILIZE_LINKS TRUE     // when true whisper will try to keep the seqnum stable on both nodes of the link (by sending request to both)
+#define WHISPER_6P_FAST_CLEAR_LINKS TRUE    // when true whisper will clear link as soon as the first seqnum error is received
 
 #define WHISPER_STATE_IDLE          0x00
 #define WHISPER_STATE_SIXTOP        0x01
 #define WHISPER_STATE_DIO           0x02
 #define WHISPER_STATE_WAIT_COAP     0x03
-#define WHISPER_STATE_SEND_RESULT   0x04
 
 #define WHISPER_COMMAND_DIO             0x01
 #define WHISPER_COMMAND_SIXTOP          0x02
@@ -67,6 +68,7 @@ typedef struct {
     uint16_t        listOffset;
     bool            waiting_for_response;
     bool            command_parsed;
+    bool            stabilize_link;  // used to track if a 6p request is send to both nodes in the link (if true this has no happened)
 } whisper_sixtop_request_settings;
 
 typedef struct {
@@ -109,6 +111,7 @@ void            whisperSixtopProcessIE(void);
 
 bool            whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header);
 void            whisperGetNeighborInfoFromSixtop(ieee802154_header_iht* header, OpenQueueEntry_t* msg);
+void            whisperStabilizeLink(const uint8_t response_type);
 
 // Whisper ACK Sniffing
 bool            whisperACKreceive(ieee802154_header_iht* ieee802154_header);

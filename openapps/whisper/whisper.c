@@ -139,8 +139,6 @@ void whisper_sendDone(OpenQueueEntry_t* msg, owerror_t error) {
                 default:
                     break;
             }
-        } else if (whisper_vars.state == WHISPER_STATE_SEND_RESULT) {
-            whisper_vars.state = WHISPER_STATE_IDLE;
         }
     }
 
@@ -162,6 +160,7 @@ void whisperClearStateCb(opentimers_id_t id) {
                 // No ACK received
                 uint8_t result[2] = {WHISPER_COMMAND_DIO, E_FAIL};
                 sendCoapResponseToController(result, 2);
+                whisper_vars.state = WHISPER_STATE_IDLE;
             }
             break;
         case WHISPER_STATE_WAIT_COAP:
@@ -331,6 +330,11 @@ void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t pt
     if(whisper_vars.whisper_sixtop.waiting_for_response) {
         if (packetfunctions_sameAddress(&addr, &whisper_vars.whisper_sixtop.target)) {
 
+            // Clean up
+            whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
+            opentimers_cancel(whisper_vars.oneshotTimer); // cancel the timer
+
+            // Check response
             switch(code) {
                 case IANA_6TOP_RC_SUCCESS:
                     whisper_log("Whisper 6P command successful.\n");
@@ -368,20 +372,92 @@ void whisperSixtopResonseReceive(OpenQueueEntry_t* pkt, uint8_t code, uint8_t pt
                     whisper_log("Whisper 6P command wrong seqNum.\n");
                 default:
                     whisper_log("Whisper 6P failed.\n");
-                    result[1] = E_FAIL;      
-                    sendCoapResponseToController(result, 2);           
+                    result[1] = E_FAIL;   
+                    sendCoapResponseToController(result, 2);   
+
+                    if( (whisper_vars.whisper_sixtop.stabilize_link == FALSE || !WHISPER_6P_STABILIZE_LINKS) 
+                        || WHISPER_6P_FAST_CLEAR_LINKS) {
+                        // We can not fix the link by sending a dummy request to the other node of the link
+                        // Clear the link
+                        whisper_vars.whisper_sixtop.request_type = IANA_6TOP_CMD_CLEAR;
+                        // Target and source are the same, reactivate stabilize link and command parsed correclty
+                        whisper_vars.whisper_sixtop.command_parsed = TRUE;
+                        whisper_vars.whisper_sixtop.stabilize_link = TRUE;
+                        whisper_log("Unfixable error! Fixing link by sending clear.");
+                        whisperExecuteSixtop();
+                        // Restart the cleanup timer
+                        opentimers_scheduleIn(
+                                whisper_vars.oneshotTimer,
+                                (uint32_t) 10000, // wait 10 seconds
+                                TIME_MS,
+                                TIMER_ONESHOT,
+                                whisperClearStateCb
+                        );
+                        return;
+                    }
                     break;
             }
 
-            // Clean up here
-            whisper_vars.whisper_sixtop.waiting_for_response = FALSE;
-            opentimers_cancel(whisper_vars.oneshotTimer); // cancel the timer
+            if(WHISPER_6P_STABILIZE_LINKS && whisper_vars.whisper_sixtop.stabilize_link) {
+                whisperStabilizeLink(code);
+                // Restart the cleanup timer
+                opentimers_scheduleIn(
+                        whisper_vars.oneshotTimer,
+                        (uint32_t) 10000, // wait 10 seconds
+                        TIME_MS,
+                        TIMER_ONESHOT,
+                        whisperClearStateCb
+                );
+            } else {
+                // Send response to controller and finish up the command
+                whisper_log("6P command finished.\n");
+                whisper_vars.state = WHISPER_STATE_IDLE;
+            }
+
         } else {
             whisper_log("Sixtop response received from wrong address.\n");
         }
     } else {
         whisper_log("Not waiting for a 6p response, yet we got here...\n");
     }
+}
+
+void whisperStabilizeLink(const uint8_t response_type) {
+    open_addr_t temp;
+
+    // If stabilize link is false return
+    if(whisper_vars.whisper_sixtop.stabilize_link == FALSE) return;
+    else whisper_vars.whisper_sixtop.stabilize_link = FALSE;
+
+    // Always swap target and source
+    memcpy(&temp, &whisper_vars.whisper_sixtop.target, sizeof(open_addr_t));
+    memcpy(&whisper_vars.whisper_sixtop.target, &whisper_vars.whisper_sixtop.source, sizeof(open_addr_t));
+    memcpy(&whisper_vars.whisper_sixtop.source, &temp, sizeof(open_addr_t));
+
+    switch (response_type) {
+        case IANA_6TOP_RC_SUCCESS:
+            // The previous request was successfull, perform the same request on the other node of the link
+            // Previous request type is set in whisper vars (sixtop)
+            // TODO: The correct cell should be sent to the other node, the selected  cell(s) can be extracted from the response packet
+            // If cell type is RX or TX, reverse it
+            if(whisper_vars.whisper_sixtop.cellType == CELLOPTIONS_RX) whisper_vars.whisper_sixtop.cellType = CELLOPTIONS_TX;
+            else whisper_vars.whisper_sixtop.cellType = CELLOPTIONS_RX;
+            whisper_log("Link stabilize is active, sending request to other node of the link.\n");
+            break;
+        case IANA_6TOP_RC_EOL:
+            // List command successfull, however the seqnum is unstable now, fix it by sending fake list request to other ndoe
+        default:
+            // Previous request failed, fix link by sending dummy (emtpy 6p list) request to the other node.
+            whisper_log("Sending fake (empty) 6p list request to other node to fix seqNum.\n");
+            whisper_vars.whisper_sixtop.stabilize_link = FALSE;
+            whisper_vars.whisper_sixtop.request_type = IANA_6TOP_CMD_LIST;
+            whisper_vars.whisper_sixtop.listMaxCells = 0;
+            whisper_vars.whisper_sixtop.listOffset = 0;
+            break;
+    }
+
+    whisper_vars.whisper_sixtop.command_parsed = TRUE;
+    whisperExecuteSixtop();
 }
 
 bool whisperSixtopPacketAccept(ieee802154_header_iht *ieee802514_header) {
@@ -414,6 +490,8 @@ bool whisperSixtopParse(const uint8_t* command) {
         whisper_log("Not a sixtop command, command parsing aborted\n");
         return FALSE;
     }
+
+    whisper_vars.whisper_sixtop.stabilize_link = WHISPER_6P_STABILIZE_LINKS; // TRUE: send 6p request to each node of the link
 
     // Command is a sixtop command, parse it
     whisper_vars.whisper_sixtop.request_type = command[2];
@@ -718,7 +796,7 @@ void sendCoapResponseToController(uint8_t *payload, uint8_t length) {
         return;
     }
 
-    if(whisper_vars.state == WHISPER_STATE_SEND_RESULT || whisper_vars.state == WHISPER_STATE_WAIT_COAP)
+    if(whisper_vars.state == WHISPER_STATE_WAIT_COAP)
         return;
 
     // take ownership over packet
@@ -763,14 +841,13 @@ void sendCoapResponseToController(uint8_t *payload, uint8_t length) {
         openqueue_freePacketBuffer(pkt);
     } else {
         whisper_log("Response message sent.\n");
-        whisper_vars.state = WHISPER_STATE_SEND_RESULT;
     }
 }
 
 // ============================================================================================
 // Logging (should be removed for openmote build, no printf)
 void whisper_log(char* msg, ...) {
-	/*open_addr_t my_id = *idmanager_getMyID(ADDR_16B);
+	open_addr_t my_id = *idmanager_getMyID(ADDR_16B);
 
 	char state[20];
 	switch(whisper_vars.state) {
@@ -794,11 +871,11 @@ void whisper_log(char* msg, ...) {
 	vsnprintf(buf, sizeof(buf), msg, v1);
 	va_end(v1);
 
-	printf(buf);*/
+	printf(buf);
 }
 
 void whisper_print_address(open_addr_t* addr) {
-	/*uint8_t length = 4;
+	uint8_t length = 4;
 	uint8_t* start_addr = addr->addr_16b;
 	switch (addr->type) {
 		case ADDR_64B:
@@ -816,5 +893,5 @@ void whisper_print_address(open_addr_t* addr) {
 		printf("%02x", start_addr[i]);
 		if(i < length - 1) printf(":");
 	}
-	printf("\n");*/
-}
+	printf("\n");
+} 
