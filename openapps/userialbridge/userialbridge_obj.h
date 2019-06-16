@@ -4,7 +4,7 @@ DO NOT EDIT DIRECTLY!!
 This file was 'objectified' by SCons as a pre-processing
 step for the building a Python extension module.
 
-This was done on 2019-05-01 23:41:52.647983.
+This was done on 2019-06-16 22:23:54.006835.
 */
 #ifndef __USERIALBRIDGE_H
 #define __USERIALBRIDGE_H

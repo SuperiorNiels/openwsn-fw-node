@@ -699,7 +699,7 @@ bool debugPrint_neighbors(void) {
     neighbors_vars.debugRow=(neighbors_vars.debugRow+1)%MAXNUMNEIGHBORS;
     temp.row=neighbors_vars.debugRow;
     temp.neighborEntry=neighbors_vars.neighbors[neighbors_vars.debugRow];
-    openserial_printStatus(STATUS_NEIGHBORS,(uint8_t*)&temp,sizeof(debugNeighborEntry_t));
+    openserial_printStatus(STATUS_NEIGHBORS,(uint8_t*)&temp,sizeof(debugNeighborEntry_t)-sizeof(dagrank_t));
     return TRUE;
 }
 
@@ -737,6 +737,7 @@ void registerNewNeighbor(open_addr_t* address,
                 neighbors_vars.neighbors[i].switchStabilityCounter = 0;
                 memcpy(&neighbors_vars.neighbors[i].addr_64b,address,sizeof(open_addr_t));
                 neighbors_vars.neighbors[i].DAGrank                = DEFAULTDAGRANK;
+                neighbors_vars.neighbors[i].rankToSend             = DEFAULTDAGRANK;
                 // since we don't have a DAG rank at this point, no need to call for routing table update
                 neighbors_vars.neighbors[i].rssi                   = rssi;
                 neighbors_vars.neighbors[i].numRx                  = 1;
@@ -801,7 +802,7 @@ void removeNeighbor(uint8_t neighborIndex) {
     neighbors_vars.neighbors[neighborIndex].backoff                   = 0;
     neighbors_vars.neighbors[neighborIndex].addr_64b.type             = ADDR_NONE;
 
-
+    neighbors_vars.neighbors[neighborIndex].rankToSend                = DEFAULTDAGRANK;
 }
 
 //=========================== helpers =========================================
@@ -856,4 +857,19 @@ uint8_t getNeighborsList(uint8_t* list) {
         }
     }
     return count;
+}
+
+void neighbors_setRankToSend(open_addr_t* neighbor, dagrank_t rank) {
+    uint8_t i;
+
+    for(i = 0; i < MAXNUMNEIGHBORS; i++) {
+        if(isThisRowMatching(neighbor, i)) {
+            // Neighbor entry found: update rankToSend
+            neighbors_vars.neighbors[i].rankToSend = rank;
+        }
+    }
+}
+
+neighborRow_t* neighbors_getNeighborRow(uint8_t index) {
+    return &neighbors_vars.neighbors[index];
 }

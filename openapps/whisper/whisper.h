@@ -34,6 +34,12 @@
 //=========================== variables =======================================
 
 typedef struct {
+    bool            active; // when true no normal dios will be sent
+    uint16_t        period; // rate at which dios will be sent
+    uint16_t        counter; // to slow down the simulator
+} whisper_propagating_dio_settings;
+
+typedef struct {
     uint8_t srcId[2];
     uint8_t destId[2];
     uint8_t seqNum;
@@ -78,6 +84,7 @@ typedef struct {
     uint16_t             timerPeriod;
     uint8_t 			 state;
     open_addr_t          my_addr;
+    open_addr_t          eui_addr;
     open_addr_t          controller_addr;
     uint8_t              payloadBuffer[30]; // 30 bytes should be enough
     // Command variables
@@ -85,6 +92,7 @@ typedef struct {
     whisper_dio_settings whisper_dio;
     whisper_sixtop_request_settings whisper_sixtop;
     whisper_neighbor_info neighbors;
+    whisper_propagating_dio_settings whisper_propagating_dio;
 } whisper_vars_t;
 
 //=========================== prototypes ======================================
@@ -94,6 +102,7 @@ void            whisper_setState(uint8_t i);
 uint8_t         whisper_getState(void);
 void            whisper_task_remote(uint8_t* buf, uint8_t bufLen);
 void            whisperClearStateCb(opentimers_id_t id); // callback to clean up commands
+void            whisperExecuteCommand();
 
 // Whipser Fake dio command
 open_addr_t*    getWhisperDIOtarget(void);
@@ -101,6 +110,13 @@ open_addr_t*    getWhisperDIOparent(void);
 open_addr_t*    getWhisperDIOnextHop(void);
 dagrank_t       getWhisperDIOrank(void);
 void            whisperDioCommand(const uint8_t* command);
+
+// Whisper propagating dio
+bool            whisper_getSendNormalDio();
+void            whisper_setDIOPeriod(uint16_t period);
+void            whisper_togglePropagatingDios();
+void            whisper_setRankForNeighbour(uint8_t* command);
+void            whisper_sendPropagatingDios();
 
 // Whisper sixtop
 open_addr_t*    getWhisperSixtopSource(void);

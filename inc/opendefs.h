@@ -392,6 +392,8 @@ typedef struct {
    uint8_t          sequenceNumber;
    uint8_t          backoffExponenton;
    uint8_t          backoff;
+   // Whisper
+   dagrank_t        rankToSend;
 } neighborRow_t;
 END_PACK
 

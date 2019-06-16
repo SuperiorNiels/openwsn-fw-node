@@ -130,8 +130,6 @@ void icmpv6rpl_init(void) {
     icmpv6rpl_vars.conf.defLifetime = 0xff; //infinite - limit for DAO period  -> 0xff
     icmpv6rpl_vars.conf.lifetimeUnit = 0xffff; // 0xffff
 
-    icmpv6rpl_vars.sendNormalDios = TRUE;
-
     opentimers_scheduleIn(
         icmpv6rpl_vars.timerIdDIO,
         SLOTFRAME_LENGTH*SLOTDURATION,
@@ -671,9 +669,12 @@ void icmpv6rpl_timer_DIO_cb(opentimers_id_t id) {
 \note This function is executed in task context, called by the scheduler.
 */
 void icmpv6rpl_timer_DIO_task(void) {
-
-    if(openrandom_get16b()<(0xffff/DIO_PORTION)){
-        sendDIO();
+    if(whisper_getSendNormalDio()) {
+        if(openrandom_get16b()<(0xffff/DIO_PORTION)){
+            sendDIO();
+        }
+    } else {
+        whisper_sendPropagatingDios();
     }
 }
 
@@ -684,9 +685,6 @@ void sendDIO(void) {
 
     OpenQueueEntry_t*    msg;
     open_addr_t addressToWrite;
-
-    if(icmpv6rpl_vars.sendNormalDios == FALSE)
-        return;
 
     memset(&addressToWrite,0,sizeof(open_addr_t));
 
@@ -920,10 +918,6 @@ uint8_t send_WhisperDIO() {
         return E_FAIL;
     }
 }
-
-void stopSendDios() {
-    icmpv6rpl_vars.sendNormalDios = FALSE;
-};
 
 //===== DAO-related
 

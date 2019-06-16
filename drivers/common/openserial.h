@@ -48,6 +48,7 @@
 #define SERFRAME_MOTE2PC_CRITICAL                ((uint8_t)'C')
 #define SERFRAME_MOTE2PC_SNIFFED_PACKET          ((uint8_t)'P')
 #define SERFRAME_MOTE2PC_PRINTF                  ((uint8_t)'F')
+#define SERFRAME_MOTE2PC_WHISPER                 ((uint8_t)'X')
 
 // frames sent PC->mote
 #define SERFRAME_PC2MOTE_SETROOT                 ((uint8_t)'R')
@@ -56,6 +57,7 @@
 #define SERFRAME_PC2MOTE_TRIGGERSERIALECHO       ((uint8_t)'S')
 #define SERFRAME_PC2MOTE_COMMAND                 ((uint8_t)'C')
 #define SERFRAME_PC2MOTE_TRIGGERUSERIALBRIDGE    ((uint8_t)'B')
+#define SERFRAME_PC2MOTE_WHISPER                 ((uint8_t)'W')
 
 //=========================== typedef =========================================
 
@@ -154,6 +156,10 @@ owerror_t openserial_printSniffedPacket(
     uint8_t*            buffer,
     uint8_t             length,
     uint8_t             channel
+);
+owerror_t openserial_sendWhisper(
+    uint8_t*            buf,
+    uint8_t             bufLen
 );
 
 void      task_openserial_debugPrint(void);
